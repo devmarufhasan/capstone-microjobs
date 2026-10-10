@@ -5,7 +5,10 @@ import {
   emailConfigured,
   emailVerificationEnabled,
 } from "@/lib/auth";
-export const metadata = { title: "Create account" };
+export const metadata = {
+  title: "Create account",
+  description: "Create your MicroJobs account to showcase your skills and connect with student opportunities.",
+};
 export default async function Page() {
   await connection();
   return (

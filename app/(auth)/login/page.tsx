@@ -5,7 +5,10 @@ import {
   emailConfigured,
   emailVerificationEnabled,
 } from "@/lib/auth";
-export const metadata = { title: "Log in" };
+export const metadata = {
+  title: "Log in",
+  description: "Log in to your MicroJobs account to continue to your workspace.",
+};
 export default async function Page({
   searchParams,
 }: {
