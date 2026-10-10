@@ -1,0 +1,42 @@
+# Module 1 implementation status
+
+Updated 2026-10-10, Asia/Dhaka. This is a work record, not an assertion that external production services have been exercised.
+
+## User decisions
+
+Module 1 only. Neon PostgreSQL + Drizzle ORM for persistence, Better Auth for authentication, HeroUI v3 for UI. A single ordinary account can change between Student and Employer mode. Administrator privilege is separate and never available at public registration. Email verification is controlled by `EMAIL_VERIFICATION_ENABLED` (currently `false`); administrator-reviewed university-ID verification remains separate and the Verified Student badge requires approved university ID. Phone OTP is deferred. Resend sends transactional email; a private S3-compatible bucket stores portfolio images/PDFs and ID images.
+
+## Implemented locally
+
+| Area                 | Behavior and code                                                                                                                                                                                                                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth                 | Better Auth email/password, env-controlled email verification, resend when enabled, password recovery/reset with Resend, database-backed sessions, logout, owner-visible session list/revocation, session revocation after password reset. `lib/auth-core.ts`, `lib/auth.ts`, auth pages and Better Auth route.           |
+| Access               | Server-side check of current account status, owner/admin checks in every Module 1 API, strict allowlisted profile input, CSRF origin check on custom mutations, database rate limits. `lib/http.ts`, `lib/policy.ts`, `lib/validation.ts`.                                                                                |
+| Roles and profile    | Preferred Student/Employer workspace mode with preserved ownership; profile name and bio edit; administrator level cannot be set from signup/profile UI. `users` table, `/profile`, `/api/users/me`.                                                                                                                      |
+| Student verification | Email must be verified before submitting only when the env flag is on; private image evidence, versioned consent, one current pending/approved request, rejected retry, independent admin review, reasons and audit history. Badge only for approved ID. `student_verifications`, `/verification`, `/admin/verification`. |
+| Portfolio            | Owner create/edit/delete/reorder, private default/public choice, public portfolio filtered by active owner, skill tags, external links, optional month, optional image or PDF certificate/work sample. `portfolio_items`, `/portfolio`, `/users/[id]/portfolio`.                                                          |
+| Media                | Private S3-compatible objects, server-side JPEG/PNG decoding/re-encoding and PDF page rewriting, size/pixel limits, randomized object key, controlled media endpoint, 60-second signed access after authorization and audited ID evidence reads. `media_files`, `lib/storage.ts`, `/api/media`.                           |
+| Admin                | Actual user/project/verified/pending/open-case counts, paginated user search, suspend/restore with reason, session revocation, audit log, protected student-ID and account-case review queues. `audit_events`, `/admin`. Admin promotion via `npm run admin:promote`.                                                     |
+| Data                 | Ten Drizzle tables plus enum/index/FK/check constraints. User/account moderation case records have reporter, subject, type, status, assignee, resolution and timestamps. Three checked-in SQL migrations under `drizzle/`. Original DBML preserved as a reference, not imported wholesale.                                |
+| UI                   | Responsive HeroUI forms/buttons and a unified Module 1 visual system across auth, dashboard, profile, verification, portfolio, cases, administration, public portfolios and state pages; animated transitions, reduced-motion support, skeleton loading, updated navigation, cards, forms, badges and empty states.       |
+
+## Boundaries and follow-up work
+
+- A development `DATABASE_URL` and `BETTER_AUTH_SECRET` are configured in `.env`. The user ran the checked-in Drizzle migrations; a read-only Neon check on 2026-10-10 found all ten Module 1 tables. The user will personally run Drizzle generate/migrate commands whenever needed; do not run them on their behalf. `RESEND_API_KEY` is still missing and `EMAIL_FROM` is still a placeholder, so live email verification cannot be tested. The user will configure the private S3-compatible bucket later.
+- With `EMAIL_VERIFICATION_ENABLED=false`, registration and login work without Resend; email remains unverified in the database. Password recovery still requires Resend. When switching the flag to `true`, configure Resend and restart the app; existing unverified users must request a verification link. This is a temporary trust-policy choice, not a claim that an address was verified.
+- Portfolio items accept one JPEG/PNG image or PDF (20 pages, 5 MB). University ID remains image-only. Multiple attachments and malware scanning are not implemented. PDFs are rewritten and downloaded as attachments.
+- There is no automatic object deletion or durable failed-email retry queue yet. Deleted/replaced portfolio images and ID evidence remain in storage. The current ID retention policy is disclosed in the UI and README.
+- Module 1 user/account reports and disputes have submission, owner history, protected admin review, decision reasons and audit events. Job-linked cases and admin job moderation depend on the later marketplace job model; `/admin/jobs` states this.
+- University-ID student verification is separate from the broader payout identity/liveness design in the original DBML; it must not be used to authorize withdrawals.
+- The module uses Better Auth's native auth tables, which differ from the custom device/risk/session DBML. Device monitoring, phone OTP, OAuth and payout KYC remain unimplemented.
+- The Fiverr-inspired, university-student marketplace storefront now includes homepage search, categories, service browsing/detail previews, opportunity browsing/detail previews, student storefront, local project brief preview, sample orders and sample messages. `lib/demo-marketplace.ts` is explicitly static sample content. Sample sellers, budgets, services, opportunities, orders and conversations are not live records; publishing, booking, applications, messaging and payments are disabled until their modules and APIs are implemented. The existing real Module 1 account, portfolio, verification and admin APIs are unchanged.
+- Browser visual QA was unavailable because no connected browser was exposed in this environment. Responsive layout was reviewed through CSS/code/build, not a live screenshot or click-through. Repeat visual QA after local services are configured.
+
+## Validation
+
+- `npm test`: 30 database-backed and HTTP tests pass using an isolated PGlite PostgreSQL database with all three checked-in migrations. Coverage includes moderation-case constraints, submission privacy and audited admin resolution, account registration/privilege injection, optional and required email verification, duplicate accounts, wrong credentials, password reset reuse/expiry, rate limiting, owner permissions, private media access, input validation, admin review, session revocation and suspension.
+- `npm run lint`: passes.
+- `npm run build:webpack`: production build passes. The default Turbopack build cannot open its CSS worker port in the current sandbox; the bundled Next.js documentation was followed and the Webpack build completed.
+- `npm run typecheck`: run independently from builds; Next type generation and TypeScript check pass. Do not run this simultaneously with a build because both rewrite `.next/types`.
+
+Do not mark Module 1 externally validated until a development Neon branch, verified Resend sender and private bucket are configured and real sign-up/upload/review flows pass.

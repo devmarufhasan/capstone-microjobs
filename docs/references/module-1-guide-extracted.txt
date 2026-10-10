@@ -1,0 +1,672 @@
+
+MICROJOBS
+Module 1: User Management & Trust
+Complete Web Implementation Requirements & Development Guide
+
+Project Detail
+ | Information
+ | Project
+ | MicroJobs — Student-focused small-job marketplace
+ | Course
+ | SE331 — Software Engineering Design Capstone Project
+ | University
+ | Daffodil International University
+ | Module Owner (as supplied)
+ | Shakibur Rahman Akash
+ | Module Scope
+ | Registration & Login; User Verification; Portfolio Showcase; Admin Dashboard
+ | Proposed Stack
+ | Next.js App Router, TypeScript, MongoDB Atlas, Mongoose, Tailwind CSS
+ | Prepared from the supplied MicroJobs Project Proposal, with implementation details added as a practical development specification.
+
+1. Purpose and Scope
+This document defines the screens, behavior, data, APIs, permissions, validation, security rules, test cases, and implementation sequence for Module 1: User Management & Trust. The proposal assigns Registration & Login and Admin Dashboard to Shakibur Rahman Akash; User Verification to Maruf Hasan All Haddy; and Portfolio Showcase to Shibashis Das. Because all four features are in Module 1, this guide documents their interfaces and integration points. Coordinate shared data models and API contracts with teammates.
+1.1 Product context
+MicroJobs is a student-focused marketplace where students can find small paid tasks and employers can post jobs. This module creates user accounts, controls access by role, supports trust checks, lets students present their work, and gives administrators tools to moderate the platform.
+1.2 Goals
+Allow students and employers to register and sign in securely.
+Separate student, employer, and administrator permissions.
+Support verification using email, phone, or university ID, with a Verified Student badge after successful student verification.
+Allow students to maintain a portfolio of projects, certificates, images, links, and work samples.
+Allow authorized administrators to manage users, jobs, reports, disputes, and platform statistics.
+Keep personal and verification information visible only to authorized users.
+2. Roles and Access Control
+Role
+ | Purpose
+ | Allowed examples
+ | Not allowed by default
+ | Guest
+ | Not signed in
+ | View public landing page, register, log in, view public job/portfolio previews if enabled
+ | Access private account data or admin tools
+ | Student
+ | Find work and build reputation
+ | Edit own profile, verify own account, manage own portfolio, view own dashboard
+ | Change role to admin, edit another user's account, moderate platform
+ | Employer
+ | Hire students
+ | Edit own profile, view student portfolios and verification badge, use marketplace features
+ | Edit another user's portfolio or access admin dashboard
+ | Admin
+ | Moderate platform
+ | Manage users/jobs/reports/disputes, review verification status, view platform statistics
+ | View passwords or unnecessary private verification data
+ | Implementation rule: role must be checked on the server for every protected API/action. Hiding a button in the UI is not authorization.
+3. Functional Requirements
+3.1 Registration & Login (owner: Shakibur Rahman Akash)
+Registration fields
+Field
+ | Required?
+ | Rules / behavior
+ | Full name
+ | Yes
+ | Trim whitespace; reasonable length; reject empty values
+ | Email
+ | Yes
+ | Normalize to lowercase; validate format; unique account identifier
+ | Phone
+ | Recommended/confirm team decision
+ | Normalize format; validate if collected; avoid assuming one country format in schema
+ | Password
+ | Yes
+ | Minimum length and strong-password policy; never store plain text
+ | Confirm password
+ | UI only
+ | Must match password; do not store this field
+ | Role
+ | Yes
+ | Student or Employer on public registration; never allow public self-registration as Admin
+ | Terms/privacy acknowledgement
+ | Recommended
+ | Record acceptance and policy version if required by the team
+ | Registration flow
+User opens /register and chooses Student or Employer.
+User fills required fields; frontend displays clear validation messages.
+Frontend submits to a server route over HTTPS.
+Server validates and normalizes all values again.
+Server checks whether email (and phone if unique) already exists.
+Server hashes the password using a suitable password-hashing library such as bcrypt or Argon2.
+Server creates the account with safe defaults: active account, unverified status, createdAt and updatedAt.
+Server creates a secure session/cookie or uses the agreed authentication provider.
+UI confirms success and directs the user to the appropriate dashboard or verification step.
+Login flow
+User opens /login and enters email and password.
+Server validates input and finds the account by normalized email.
+Password is checked against the stored hash; responses should not reveal whether the email exists.
+On success, create/refresh a secure session and redirect according to role.
+On failure, show a generic message such as “Email or password is incorrect.”
+Logout invalidates the session and clears the session cookie.
+Suggested pages
+Route
+ | Purpose
+ | Access
+ | /register
+ | Create student/employer account
+ | Guest
+ | /login
+ | Sign in
+ | Guest
+ | /forgot-password
+ | Request password reset
+ | Guest
+ | /reset-password/[token]
+ | Set a new password using a valid one-time token
+ | Guest with valid token
+ | /dashboard
+ | Role-aware landing dashboard
+ | Signed-in user
+ | /profile
+ | View/edit own profile
+ | Signed-in user
+ | /unauthorized
+ | Explain access is not permitted
+ | Any
+ | 3.2 User Verification (owner: Maruf Hasan All Haddy)
+The proposal permits verification by email, phone, or university ID. A student receives the “Verified Student” badge only after the relevant check is approved. Email/phone verification proves control of a contact method; university ID review is a separate identity/student-status check.
+Verification method
+ | Suggested flow
+ | Data/status to retain
+ | Email
+ | Send one-time, expiring verification link or code; user completes verification
+ | emailVerifiedAt; token hash and expiry only while pending
+ | Phone
+ | Send OTP through an approved SMS provider; rate-limit attempts
+ | phoneVerifiedAt; never retain OTP after use
+ | University ID
+ | Student submits required evidence through a private upload; authorized reviewer approves/rejects
+ | studentVerificationStatus, reviewerId, reviewedAt, reason; restrict access to evidence
+ | Verification states
+State
+ | Meaning
+ | Badge
+ | not_started
+ | No verification request
+ | Not shown
+ | pending
+ | Request submitted and awaiting check
+ | Not shown
+ | verified
+ | Required check approved
+ | Show Verified Student badge only for approved students
+ | rejected
+ | Review did not pass; show safe reason and retry path
+ | Not shown
+ | Define with the team whether the badge requires university-ID approval specifically or whether email/phone verification is sufficient. The proposal lists these methods but does not define the exact policy.
+Verification safety requirements
+Verification tokens/OTPs must expire, be single-use, and be stored safely (prefer token hashes).
+Rate-limit resend and verification attempts; add cooldowns to reduce abuse.
+Do not expose university ID documents or sensitive verification notes to other users.
+Log reviewer actions without logging OTPs, passwords, or document contents.
+Provide a clear pending/rejected status and a controlled resubmission process.
+3.3 Portfolio Showcase (owner: Shibashis Das)
+Students can display previous projects, certificates, images, links, and work samples for employers to review.
+Portfolio field
+ | Description / rule
+ | Title
+ | Required, short project/work title
+ | Description
+ | What was built/done; trim and length-limit
+ | Skills/tags
+ | Optional list of technologies or skills
+ | Media
+ | Images/documents uploaded through a controlled upload service; enforce file type and size limits
+ | External link
+ | Optional URL; validate URL format and render as a safe external link
+ | Project date
+ | Optional month/year or start/end dates
+ | Visibility
+ | Public to marketplace users, private, or hidden; agree on allowed choices
+ | Created/updated timestamps
+ | Maintain automatically
+ | Portfolio behavior
+Student can create, view, edit, reorder, hide, and delete their own portfolio items.
+Employers can view items marked public from a student profile.
+Only the owner and authorized admin can edit or delete an item.
+Uploaded files should use an approved storage service; save the file URL and metadata in MongoDB, not raw file bytes unless the team intentionally chooses that design.
+Validate uploads and links; do not trust filenames or client-supplied MIME types alone.
+Suggested pages/components
+Route / component
+ | Purpose
+ | /portfolio
+ | Manage own portfolio
+ | /users/[userId]/portfolio
+ | View public portfolio, subject to privacy rules
+ | PortfolioItemForm
+ | Create/edit item
+ | PortfolioItemCard
+ | Display project image, title, description, tags, and link
+ | UploadControl
+ | Upload allowed file types with progress and error state
+ | 3.4 Admin Dashboard (owner: Shakibur Rahman Akash)
+The proposal states that admins manage users, jobs, reports, disputes, and platform statistics from one dashboard. Some job/report/dispute features may be implemented by teammates; agree on API ownership and reuse their data.
+Admin area
+ | Minimum functionality
+ | Safety/audit expectations
+ | Overview
+ | Counts for users, students, employers, verified students, jobs, open reports and disputes
+ | Use server-derived counts; show loading/error states
+ | User management
+ | Search/filter users; view safe profile summary; activate/suspend account; inspect role and verification status
+ | Require admin role; confirm destructive/high-impact actions; log actions
+ | Job management
+ | List/search jobs; hide/remove prohibited or fraudulent jobs; view status
+ | Use shared job model/API owned by marketplace teammate
+ | Reports
+ | Review reported users/jobs, mark in review/resolved/rejected
+ | Restrict reporter personal data to authorized admins
+ | Disputes
+ | View case details, record decision and status
+ | Keep an audit trail and timestamps
+ | Statistics
+ | Show platform activity metrics and trends
+ | Define each metric and time range; avoid exposing unnecessary personal data
+ | Admin routes
+Route
+ | Purpose
+ | Access
+ | /admin
+ | Dashboard overview
+ | Admin only
+ | /admin/users
+ | Search and manage accounts
+ | Admin only
+ | /admin/jobs
+ | Moderate jobs
+ | Admin only
+ | /admin/reports
+ | Review reports
+ | Admin only
+ | /admin/disputes
+ | Review disputes
+ | Admin only
+ | /admin/verification
+ | Review student-ID requests if assigned to admin
+ | Authorized reviewer/admin only
+ | Do not create a public “admin” option on registration. Create the first admin through a controlled seed script or protected deployment procedure, and protect admin account recovery carefully.
+4. Suggested Technology and Architecture
+Layer
+ | Suggested choice
+ | Responsibility
+ | Frontend
+ | Next.js App Router + TypeScript + Tailwind CSS
+ | Pages, forms, tables, responsive layout, validation feedback
+ | Backend
+ | Next.js Route Handlers / server actions as agreed
+ | Authentication checks, validation, authorization, business rules
+ | Database
+ | MongoDB Atlas + Mongoose
+ | Users, portfolio items, verification state, admin audit events
+ | Authentication
+ | Choose one approach: Auth.js/NextAuth.js or custom secure session
+ | Session creation, expiry, refresh, logout
+ | Password hashing
+ | bcrypt or Argon2 library
+ | Store password hash only
+ | Uploads
+ | Cloudinary or another approved private/public storage setup
+ | Portfolio media and verification documents with different privacy rules
+ | Validation
+ | Zod on server and optionally client
+ | Validate request payloads and provide useful errors
+ | Version control
+ | Git + GitHub
+ | Branches, pull requests, reviews, issue tracking
+ | The proposal suggests NextAuth.js, Cloudinary, and Zod as optional additions. Confirm the team's exact versions and authentication approach before implementation; avoid mixing multiple competing session systems.
+5. Suggested Project Structure
+src/  app/    (auth)/      register/page.tsx      login/page.tsx      forgot-password/page.tsx    dashboard/page.tsx    profile/page.tsx    portfolio/page.tsx    users/[userId]/portfolio/page.tsx    admin/      page.tsx      users/page.tsx      jobs/page.tsx      reports/page.tsx      disputes/page.tsx      verification/page.tsx    api/      auth/register/route.ts      auth/login/route.ts          # only if using custom auth      auth/logout/route.ts         # only if using custom auth      users/me/route.ts      users/[userId]/route.ts      verification/email/route.ts      verification/phone/route.ts      verification/student-id/route.ts      portfolio/route.ts      portfolio/[itemId]/route.ts      admin/users/route.ts      admin/users/[userId]/route.ts  components/    auth/    profile/    portfolio/    admin/    ui/  lib/    db.ts    auth.ts    permissions.ts    validation/    audit.ts  models/    User.ts    PortfolioItem.ts    VerificationRequest.ts    AdminAuditLog.ts  types/    user.ts    portfolio.ts
+This is a suggested structure, not a mandatory Next.js layout. Adjust paths to match the project already created. If your project uses a root-level app/ folder instead of src/app/, keep the same concepts and adapt the paths.
+6. Data Model Design
+6.1 User collection
+Field
+ | Type / example
+ | Notes
+ | _id
+ | ObjectId
+ | MongoDB primary identifier
+ | name
+ | String
+ | Required; trim and length-limit
+ | email
+ | String
+ | Required; lowercase/normalized; unique index
+ | phone
+ | String | null
+ | Optional or required according to team decision; normalize
+ | passwordHash
+ | String
+ | Never return from API; never store plain password
+ | role
+ | student | employer | admin
+ | Server-controlled; public registration permits student/employer only
+ | status
+ | active | suspended | deleted
+ | Account moderation state
+ | emailVerifiedAt
+ | Date | null
+ | Contact verification timestamp
+ | phoneVerifiedAt
+ | Date | null
+ | Contact verification timestamp
+ | studentVerificationStatus
+ | not_started | pending | verified | rejected
+ | Applies to student verification
+ | avatarUrl
+ | String | null
+ | Use validated upload URL
+ | bio
+ | String | null
+ | Public profile summary; length-limited
+ | createdAt / updatedAt
+ | Date
+ | Automatic timestamps
+ | 6.2 PortfolioItem collection
+Field
+ | Type / example
+ | Notes
+ | _id
+ | ObjectId
+ | Primary identifier
+ | ownerId
+ | ObjectId
+ | Reference to User; indexed
+ | title
+ | String
+ | Required
+ | description
+ | String
+ | Length-limited
+ | skills
+ | String[]
+ | Normalize and limit count
+ | media
+ | Array of {url, type, altText}
+ | Store metadata/URLs; validate upload and access
+ | projectUrl
+ | String | null
+ | Validate URL; safely render
+ | visibility
+ | public | private
+ | Server must enforce visibility
+ | createdAt / updatedAt
+ | Date
+ | Automatic timestamps
+ | 6.3 VerificationRequest collection (recommended)
+Field
+ | Type / example
+ | Notes
+ | userId
+ | ObjectId
+ | Owner of request
+ | method
+ | email | phone | university_id
+ | Verification channel
+ | status
+ | pending | approved | rejected | expired
+ | State machine
+ | evidenceUrl
+ | String | null
+ | Private access only for university ID evidence
+ | tokenHash / expiresAt
+ | String / Date
+ | Only for token-based methods; do not store raw token/OTP
+ | reviewerId
+ | ObjectId | null
+ | Authorized reviewer
+ | reviewedAt
+ | Date | null
+ | Audit information
+ | reviewNote
+ | String | null
+ | Safe, non-sensitive explanation
+ | 6.4 AdminAuditLog collection (recommended)
+Field
+ | Type / example
+ | Notes
+ | actorId
+ | ObjectId
+ | Admin who performed the action
+ | action
+ | String
+ | For example USER_SUSPENDED
+ | targetType / targetId
+ | String / ObjectId
+ | Entity affected
+ | reason
+ | String | null
+ | Required for sensitive moderation actions if team policy says so
+ | createdAt
+ | Date
+ | Immutable event timestamp
+ | metadata
+ | Object
+ | Allowlisted metadata only; never include secrets/documents
+ | Add database indexes for normalized email (unique), role/status filters, portfolio ownerId, and verification status. Handle duplicate-key errors gracefully.
+7. API Contract Proposal
+Method + endpoint
+ | Purpose
+ | Auth / permission
+ | Typical result
+ | POST /api/auth/register
+ | Create student/employer account
+ | Guest
+ | 201 with safe user summary; never return hash
+ | POST /api/auth/login
+ | Sign in if using custom auth
+ | Guest + rate-limited
+ | 200 with session cookie and safe user summary
+ | POST /api/auth/logout
+ | End session if using custom auth
+ | Signed-in user
+ | 200 success
+ | GET /api/users/me
+ | Get current user's safe profile
+ | Signed-in user
+ | 200 profile without secrets
+ | PATCH /api/users/me
+ | Update allowed profile fields
+ | Signed-in user
+ | 200 updated safe profile
+ | POST /api/verification/email
+ | Start/complete email verification according to chosen flow
+ | Signed-in user or token flow
+ | 202/200 with safe status
+ | POST /api/verification/phone
+ | Start/complete phone OTP flow
+ | Signed-in user
+ | 202/200 with safe status
+ | POST /api/verification/student-id
+ | Submit student verification request
+ | Student
+ | 201 pending status
+ | GET /api/portfolio
+ | List current user's portfolio items
+ | Signed-in student
+ | 200 list
+ | POST /api/portfolio
+ | Create portfolio item
+ | Student
+ | 201 item
+ | PATCH /api/portfolio/:itemId
+ | Update own item
+ | Owner student or authorized admin
+ | 200 item
+ | DELETE /api/portfolio/:itemId
+ | Delete own item
+ | Owner student or authorized admin
+ | 204
+ | GET /api/users/:userId
+ | Get public profile summary
+ | Public or signed-in, according to policy
+ | 200 safe profile
+ | GET /api/admin/users
+ | Search/filter users
+ | Admin
+ | 200 paginated list
+ | PATCH /api/admin/users/:userId
+ | Change permitted status/role fields
+ | Admin; high-impact changes controlled
+ | 200 safe summary
+ | GET /api/admin/overview
+ | Read aggregate dashboard statistics
+ | Admin
+ | 200 metrics
+ | This is a proposed contract for coordination, not an assertion that these endpoints already exist. Auth.js may provide its own sign-in routes; do not duplicate them unless intentionally using custom authentication. Use consistent status codes and a common error shape, for example { error: { code, message, fieldErrors? } }.
+8. UI / UX Requirements
+Use a consistent header, navigation, spacing, typography, buttons, input styles, and alert styles.
+Support mobile, tablet, and desktop layouts.
+Every form needs labels, required-field indicators, inline validation, disabled/loading state, success feedback, and a useful error message.
+Never rely on placeholder text as the only field label.
+Use accessible keyboard focus states and meaningful alt text for portfolio images.
+Use confirmation dialogs for account suspension, deletion, and other high-impact admin actions.
+Show empty states (for example, “You have not added any portfolio projects yet”) and retry controls for failed data loads.
+Do not show a Verified Student badge merely because email is verified unless that matches the agreed verification policy.
+9. Security, Privacy, and Reliability
+Area
+ | Required implementation behavior
+ | Password handling
+ | Hash with bcrypt/Argon2; never log or return passwords/hashes; use a secure reset flow.
+ | Sessions/cookies
+ | Use HTTPS in production; HttpOnly, Secure, and appropriate SameSite cookie settings; define expiry and logout behavior.
+ | Authorization
+ | Check session and role on the server for every protected endpoint; enforce ownership for profile/portfolio changes.
+ | Input validation
+ | Validate all request bodies, params, and query values on the server; reject unexpected fields.
+ | CSRF / XSS / injection
+ | Use framework protections appropriately, escape/render user content safely, avoid unsafe HTML, and apply CSRF protections when relevant to the chosen auth design.
+ | Rate limiting
+ | Protect login, password reset, verification sends, and OTP attempts.
+ | Privacy
+ | Keep passwords, tokens, phone numbers, and student ID evidence out of public APIs; minimize data collected.
+ | Uploads
+ | Limit size and file types; verify content; use safe filenames; prevent executable uploads; restrict private evidence access.
+ | Admin safety
+ | No public admin registration; audit important actions; protect admin sessions and account recovery.
+ | Secrets
+ | Keep database URI, auth secrets, email/SMS keys, and storage keys in environment variables; never commit .env files.
+ | Database
+ | Use least-privilege credentials, indexes, backups, and careful error handling.
+ | Logging
+ | Record useful events while redacting passwords, tokens, OTPs, and sensitive document data.
+ | The proposal targets pages loading within 3 seconds under normal conditions and API responses within 1–2 seconds. Treat these as performance targets to measure, not guarantees.
+10. Environment Configuration
+Create a local .env.local file and keep it out of Git. Example variable names (the exact set depends on the selected authentication, email/SMS, and upload providers):
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>/<database>AUTH_SECRET=<long-random-secret>APP_URL=http://localhost:3000EMAIL_SERVER_HOST=<smtp-host>EMAIL_SERVER_USER=<smtp-user>EMAIL_SERVER_PASSWORD=<smtp-password>SMS_PROVIDER_API_KEY=<provider-key>CLOUDINARY_CLOUD_NAME=<cloud-name>CLOUDINARY_API_KEY=<api-key>CLOUDINARY_API_SECRET=<api-secret>
+Do not paste real credentials into source code, GitHub, screenshots, or chat. Use the hosting platform's secret manager for production values.
+11. Error Handling Rules
+Scenario
+ | Expected user-facing behavior
+ | Missing/invalid form value
+ | Show field-level message; do not submit invalid data
+ | Email already registered
+ | Offer sign-in or password recovery without exposing account data to unauthorized callers
+ | Wrong login credentials
+ | Generic email/password error
+ | Expired verification link/OTP
+ | Explain expiry and offer safe resend/restart
+ | Not signed in
+ | Return 401; UI redirects to login where appropriate
+ | Wrong role
+ | Return 403; show unauthorized page/message
+ | Record not found
+ | Return 404
+ | Upload too large/unsupported
+ | Reject with allowed size/type guidance
+ | Database/provider unavailable
+ | Return safe 500/503 response; log technical details server-side
+ | Duplicate database key
+ | Convert to a useful conflict/validation message
+ | 12. Acceptance Criteria
+A student can register and log in; an employer can register and log in.
+Registration cannot create an admin account.
+Duplicate email registration is rejected safely.
+Passwords are stored only as hashes.
+Signed-out users cannot access private profile or admin APIs.
+Students and employers cannot access admin routes or perform admin API actions.
+Users can edit only their own permitted profile fields.
+Verification state changes only after the corresponding verification process succeeds or an authorized review approves it.
+Only approved students receive the Verified Student badge according to the team's policy.
+Students can create, update, and delete their own portfolio items; employers can view public items only.
+Admin can search users and moderate the agreed user/job/report/dispute resources.
+Sensitive admin actions create audit records.
+The interface is responsive and displays loading, empty, success, and error states.
+No secrets or sensitive verification evidence appear in client responses or logs.
+13. Test Plan
+ID
+ | Test
+ | Expected result
+ | AUTH-01
+ | Register with valid student data
+ | Account created with student role and hashed password
+ | AUTH-02
+ | Register with valid employer data
+ | Account created with employer role
+ | AUTH-03
+ | Register using an existing email
+ | Rejected with safe validation response
+ | AUTH-04
+ | Submit missing/invalid email
+ | Server rejects request
+ | AUTH-05
+ | Attempt to register as admin
+ | Rejected or role ignored; account never receives admin privileges
+ | AUTH-06
+ | Login with wrong password
+ | Generic authentication failure
+ | AUTH-07
+ | Access protected API while signed out
+ | 401 response
+ | AUTH-08
+ | Student calls admin API
+ | 403 response
+ | VER-01
+ | Use expired email token/OTP
+ | Rejected; safe restart/resend path shown
+ | VER-02
+ | Reuse already-consumed token
+ | Rejected
+ | VER-03
+ | Student verification pending
+ | No Verified Student badge
+ | VER-04
+ | Authorized approval completed
+ | Status updates and badge follows policy
+ | PORT-01
+ | Student creates portfolio item
+ | Item saved with current user as owner
+ | PORT-02
+ | Student edits another user's item
+ | 403 or safe 404; no change
+ | PORT-03
+ | Upload unsupported file type
+ | Upload rejected
+ | PORT-04
+ | Employer views private portfolio item
+ | Item not disclosed
+ | ADM-01
+ | Admin searches user list
+ | Paginated results; secrets excluded
+ | ADM-02
+ | Non-admin opens /admin
+ | Blocked on server and in UI
+ | ADM-03
+ | Admin suspends a user
+ | Status changes and audit event is recorded
+ | ADM-04
+ | Admin overview loads with no records
+ | Zero/empty metrics display correctly
+ | Run these tests manually during development and automate important validation/authorization cases where practical. Also test small mobile widths, keyboard-only navigation, and failed network requests.
+14. Development Plan
+Phase
+ | Tasks
+ | Deliverable
+ | 1. Align
+ | Confirm Next.js folder layout, auth approach, roles, badge policy, portfolio visibility, admin scope, and teammate API ownership
+ | Agreed API/schema contract
+ | 2. Foundation
+ | Set up TypeScript, Tailwind, database connection, environment variables, shared validation and error utilities
+ | Project foundation
+ | 3. Authentication
+ | Implement registration, login, logout, session, role checks, protected routes, profile basics
+ | Working registration/login
+ | 4. Verification
+ | Implement email/phone or student-ID flow selected by team; status UI and badge rules
+ | Working verification path
+ | 5. Portfolio
+ | Implement model, CRUD endpoints, upload integration, visibility checks, public display
+ | Working portfolio showcase
+ | 6. Admin
+ | Implement protected dashboard, users, statistics, and integrate jobs/reports/disputes APIs
+ | Working admin interface
+ | 7. Test & harden
+ | Execute test plan, review privacy/security, test responsive UI, fix bugs
+ | Acceptance-ready module
+ | 8. Deploy
+ | Configure production secrets, MongoDB access, upload/email providers, HTTPS, backups and monitoring
+ | Deployed module
+ | 15. Git Workflow and Team Integration
+Use a feature branch for each task, such as feature/auth, feature/verification, feature/portfolio, and feature/admin.
+Agree on User and PortfolioItem schema fields before multiple teammates code against them.
+Keep authentication/session logic centralized in lib/auth.ts or the agreed provider integration.
+Use pull requests and review authorization logic before merging.
+Do not let the verification module update arbitrary User fields directly; expose a controlled service/API for status transitions.
+Admin pages for jobs, reports, and disputes should integrate with the teammates' agreed endpoints rather than inventing duplicate collections.
+Document setup steps, environment variable names, seed instructions, and test accounts in README.md.
+16. Definition of Done
+All agreed routes/pages work on the development environment.
+Database models and indexes are created and duplicate/error cases are handled.
+Server-side validation, authentication, role authorization, and ownership checks are tested.
+No passwords, tokens, or private student documents are exposed.
+Required acceptance criteria and test cases pass.
+Responsive layouts, loading states, empty states, and error states are implemented.
+Code is reviewed and merged; setup and deployment instructions are documented.
+17. Decisions to Confirm Before Coding
+Will authentication use Auth.js/NextAuth.js or a custom session implementation?
+Is phone required at registration, and must phone be unique?
+Does “Verified Student” require university-ID approval, or can another verification method qualify?
+Who can review university-ID evidence, and how long should it be retained?
+Are portfolio items public by default? Which file types and maximum upload size are allowed?
+Can admins change user roles, or only suspend/restore accounts?
+Which teammate owns the Jobs, Reports, and Disputes APIs used by the admin dashboard?
+Which email, SMS, and file-upload providers will be used?
+18. Source Basis and Assumptions
+Source basis: the supplied MicroJobs Project Proposal (SE331, Fall 2026). The proposal specifies the project context, proposed technology stack, the four Module 1 features, their named owners, the three verification options, portfolio content types, admin responsibilities, and high-level security/privacy/performance requirements. Detailed field rules, routes, schemas, API contracts, status values, test cases, and implementation sequencing in this guide are proposed engineering details to help implement the proposal; they are not claims that the proposal already specifies every such detail. Confirm open policy choices with the project team and supervisor.
