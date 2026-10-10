@@ -1,0 +1,1388 @@
+// Microjobsworks database design
+// Design source only; implementation and migrations are separate.
+// All USD amounts are integer cents; all BDT amounts are integer poisha.
+
+Enum user_status {
+  active
+  suspended
+  banned
+}
+
+Enum user_access_level {
+  user
+  administrator
+}
+
+Enum account_mode {
+  worker
+  buyer
+}
+
+Enum device_status {
+  active
+  blocked
+}
+
+Enum security_event_type {
+  new_device
+  new_ip_address
+  unusual_location
+  device_velocity_exceeded
+  ip_velocity_exceeded
+  blocked_device_login
+}
+
+Enum security_action {
+  allow
+  challenge
+  suspend
+  ban
+}
+
+Enum identity_document_type {
+  national_id
+  birth_registration
+  passport
+  driving_licence
+}
+
+Enum identity_verification_status {
+  draft
+  pending_review
+  approved
+  rejected
+  expired
+  revoked
+}
+
+Enum identity_document_side {
+  front
+  back
+  identity_page
+  selfie
+}
+
+Enum media_visibility {
+  private
+  public
+}
+
+Enum media_status {
+  pending
+  ready
+  quarantined
+  deleted
+}
+
+Enum media_purpose {
+  identity_document
+  identity_liveness_video
+  profile_image
+  job_attachment
+  submission_proof
+  advertisement_banner
+  general
+}
+
+Table users {
+  id bigint [primary key, increment]
+  email varchar(255) [not null, unique]
+  password_hash varchar(255) [note: 'Nullable for users who authenticate only through OAuth']
+  phone_number_encrypted text [note: 'Optional normalized phone number encrypted with a versioned authenticated envelope']
+  phone_number_hmac varchar(64) [note: 'Keyed HMAC for exact lookup and duplicate checks; never display the raw number']
+  phone_number_masked varchar(30) [note: 'Safe display form, for example +880 17******78']
+  phone_verified_at timestamp
+  access_level user_access_level [not null, default: 'user']
+  preferred_mode account_mode [not null, default: 'worker', note: 'UI preference only. Buyer and worker authorization comes from job ownership and participation.']
+  display_name varchar(150)
+  country_code char(2) [note: 'ISO 3166-1 alpha-2 country code']
+  bio text
+  is_discoverable boolean [not null, default: false, note: 'Opt-in public profile search; does not affect job participation or authorization']
+  profile_media_file_id bigint [unique]
+  status user_status [not null, default: 'active']
+  email_verified_at timestamp
+  onboarding_completed_at timestamp
+  last_active_at timestamp
+  suspended_at timestamp
+  banned_at timestamp
+  status_reason varchar(255)
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    email
+    phone_number_hmac [name: 'idx_users_phone_number_hmac']
+    status
+    created_at
+  }
+}
+
+Table user_devices {
+  id bigint [primary key, increment]
+  user_id bigint [not null]
+  device_identifier_hash varchar(255) [not null]
+  display_name varchar(150) [not null, note: 'User-friendly label, for example Chrome on Windows']
+  device_type varchar(50)
+  operating_system varchar(100)
+  browser varchar(100)
+  user_agent text
+  first_ip_address varchar(45)
+  last_ip_address varchar(45)
+  status device_status [not null, default: 'active']
+  is_trusted boolean [not null, default: false]
+  blocked_at timestamp
+  blocked_reason varchar(255)
+  first_seen_at timestamp [not null]
+  last_seen_at timestamp [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (user_id, device_identifier_hash) [name: 'idx_user_devices_identifier', unique]
+    (user_id, status, last_seen_at) [name: 'idx_user_devices_status']
+    last_ip_address [name: 'idx_user_devices_last_ip']
+  }
+
+}
+
+Table sessions {
+  id bigint [primary key, increment]
+  token_hash varchar(255) [not null]
+  user_id bigint [not null]
+  device_id bigint [not null]
+  ip_address varchar(45) [not null]
+  user_agent text
+  impersonating_user_id bigint
+  two_factor_verified boolean [not null, default: false]
+  metadata json
+  expires_at timestamp [not null]
+  revoked_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (user_id, created_at) [name: 'idx_sessions_user_id']
+    (device_id, created_at) [name: 'idx_sessions_device_id']
+    token_hash [name: 'idx_sessions_token_hash', unique]
+    expires_at [name: 'idx_sessions_expires_at']
+  }
+}
+
+Table oauth_accounts {
+  id bigint [primary key, increment]
+  provider varchar(50) [not null]
+  provider_account_id varchar(255) [not null]
+  user_id bigint [not null]
+  metadata json
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (user_id, created_at) [name: 'idx_oauth_accounts_user_id']
+    (provider, provider_account_id) [name: 'idx_oauth_accounts_provider_account', unique]
+    (user_id, provider) [name: 'idx_oauth_accounts_user_provider', unique]
+  }
+}
+
+Table user_security_events {
+  id bigint [primary key, increment]
+  user_id bigint [not null]
+  device_id bigint
+  session_id bigint
+  event_type security_event_type [not null]
+  ip_address varchar(45)
+  risk_score smallint [not null, default: 0, note: 'Application-enforced range from 0 to 100']
+  action security_action [not null, default: 'allow']
+  reason varchar(255)
+  metadata json
+  occurred_at timestamp [not null]
+  created_at timestamp [not null]
+
+  indexes {
+    (user_id, occurred_at) [name: 'idx_user_security_events_user']
+    (event_type, occurred_at) [name: 'idx_user_security_events_type']
+    (ip_address, occurred_at) [name: 'idx_user_security_events_ip']
+    (action, occurred_at) [name: 'idx_user_security_events_action']
+  }
+
+  Note: 'New devices and IP addresses are allowed by default. The application evaluates device and IP velocity over a time window, then challenges, suspends, or bans only when the combined risk policy requires it.'
+}
+
+Table media_files {
+  id bigint [primary key, increment]
+  uploaded_by_user_id bigint
+  purpose media_purpose [not null, default: 'general']
+  visibility media_visibility [not null, default: 'private']
+  status media_status [not null, default: 'pending']
+  storage_provider varchar(50) [not null, default: 'r2']
+  storage_bucket varchar(100) [not null]
+  storage_key varchar(500) [not null]
+  original_filename_encrypted text
+  display_name varchar(255)
+  alt_text varchar(500)
+  mime_type varchar(100) [not null]
+  size_bytes bigint [not null]
+  checksum_sha256 varchar(64) [note: 'Server-computed; required before ready. Exact byte match only; never globally unique.']
+  checksum_verified_at timestamp
+  duration_ms integer
+  delete_after timestamp [note: 'Null means no scheduled deletion. Identity-document media remains null under the current product policy.']
+  width integer
+  height integer
+  metadata json
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  deleted_at timestamp
+
+  indexes {
+    (storage_provider, storage_bucket, storage_key) [name: 'idx_media_files_storage_key', unique]
+    (uploaded_by_user_id, purpose, created_at) [name: 'idx_media_files_uploader']
+    (status, visibility, created_at) [name: 'idx_media_files_status_visibility']
+    (uploaded_by_user_id, purpose, checksum_sha256) [name: 'idx_media_owner_checksum']
+    checksum_sha256 [name: 'idx_media_files_checksum']
+  }
+
+  Note: 'The media library stores metadata only. File bytes remain in object storage. Private media is served only through an authorized short-lived signed URL; permanent public URLs are not stored for identity documents or submission proof. Identity-document objects are retained with delete_after null under the current policy; access remains authorized and audited.'
+}
+
+Table identity_verifications {
+  id bigint [primary key, increment]
+  user_id bigint [not null]
+  document_type identity_document_type [not null]
+  issuing_country char(2) [not null, default: 'BD', note: 'ISO 3166-1 alpha-2 country code']
+  document_number_encrypted text [not null]
+  document_number_hmac varchar(64) [not null, note: 'Keyed HMAC used only for duplicate-document detection']
+  document_number_masked varchar(50) [not null]
+  full_name_encrypted text [not null]
+  date_of_birth_encrypted text [not null]
+  status identity_verification_status [not null, default: 'draft']
+  provider varchar(100)
+  provider_reference varchar(255)
+  reviewed_by_user_id bigint
+  rejection_reason varchar(500)
+  metadata json
+  submitted_at timestamp
+  reviewed_at timestamp
+  approved_at timestamp
+  expires_at timestamp
+  revoked_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (user_id, status, created_at) [name: 'idx_identity_verifications_user_status']
+    (document_type, issuing_country, document_number_hmac) [name: 'idx_identity_verifications_document']
+    (status, submitted_at) [name: 'idx_identity_verifications_review_queue']
+    provider_reference [name: 'idx_identity_verifications_provider_reference']
+  }
+
+  Note: 'A user may retry the same document after rejection. The application uses the HMAC index to prevent one identity document from being approved for different users, permits only one current pending or approved verification per user, and requires approved, unexpired, non-revoked identity verification for payouts.'
+}
+
+Table identity_documents {
+  id bigint [primary key, increment]
+  identity_verification_id bigint [not null]
+  media_file_id bigint [not null]
+  side identity_document_side [not null]
+  created_at timestamp [not null]
+
+  indexes {
+    (identity_verification_id, side) [name: 'idx_identity_documents_verification_side', unique]
+    media_file_id [name: 'idx_identity_documents_media_file']
+  }
+
+  Note: 'Reuse requires the same verification owner and authorized ready private media. Submitted links are immutable. Retention must consider every reference. This table assigns private media-library files to an identity verification. The linked media file must use purpose identity_document and visibility private.'
+}
+
+Ref user_devices_owner: user_devices.user_id > users.id [delete: cascade, update: cascade]
+Ref sessions_owner: sessions.user_id > users.id [delete: cascade, update: cascade]
+Ref sessions_device: sessions.device_id > user_devices.id [delete: cascade, update: cascade]
+Ref sessions_impersonated_user: sessions.impersonating_user_id >? users.id [delete: set null, update: cascade]
+Ref oauth_accounts_owner: oauth_accounts.user_id > users.id [delete: cascade, update: cascade]
+Ref user_security_events_owner: user_security_events.user_id > users.id [delete: cascade, update: cascade]
+Ref user_security_events_device: user_security_events.device_id >? user_devices.id [delete: set null, update: cascade]
+Ref user_security_events_session: user_security_events.session_id >? sessions.id [delete: set null, update: cascade]
+Ref media_files_uploader: media_files.uploaded_by_user_id >? users.id [delete: set null, update: cascade]
+Ref identity_verifications_owner: identity_verifications.user_id > users.id [delete: cascade, update: cascade]
+Ref identity_verifications_reviewer: identity_verifications.reviewed_by_user_id >? users.id [delete: set null, update: cascade]
+Ref identity_documents_verification: identity_documents.identity_verification_id > identity_verifications.id [delete: cascade, update: cascade]
+Ref identity_documents_media: identity_documents.media_file_id > media_files.id [delete: restrict, update: cascade]
+
+Enum liveness_status {
+  issued
+  submitted
+  passed
+  failed
+  expired
+}
+Enum job_status {
+  draft
+  pending_review
+  published
+  paused
+  completed
+  cancelled
+  rejected
+  expired
+}
+Enum job_location_policy {
+  all_supported
+  include_only
+  exclude
+}
+Enum job_attachment_kind {
+  instruction
+  banner
+}
+Enum participation_status {
+  reserved
+  submitted
+  changes_requested
+  approved
+  rejected
+  expired
+  cancelled
+}
+Enum proof_type {
+  text
+  url
+  image
+  video
+  file
+}
+Enum review_decision {
+  approved
+  changes_requested
+  rejected
+}
+Enum transfer_status {
+  pending
+  processing
+  succeeded
+  failed
+  cancelled
+  unknown
+}
+Enum account_kind {
+  user_available
+  user_locked
+  job_escrow
+  platform_revenue
+  settlement
+}
+Enum ledger_kind {
+  deposit
+  job_funding
+  job_refund
+  job_reward_increase
+  job_promotion_purchase
+  job_promotion_refund
+  earning
+  advertisement_purchase
+  advertisement_refund
+  subscription_purchase
+  subscription_refund
+  referral_reward
+  prize_ticket_purchase
+  prize_payout
+  withdrawal_lock
+  withdrawal_payment
+  withdrawal_release
+  reversal
+  adjustment
+}
+Enum advertisement_status {
+  draft
+  pending_review
+  approved
+  scheduled
+  active
+  paused
+  completed
+  rejected
+  cancelled
+}
+Enum advertisement_review_decision {
+  approved
+  rejected
+}
+Enum moderation_case_status {
+  open
+  under_review
+  resolved
+  rejected
+}
+Enum enforcement_action_type {
+  warning
+  restrict
+  suspend
+  ban
+}
+Enum account_health_event_type {
+  penalty
+  recovery
+  warning_issued
+  warning_revoked
+  automatic_ban
+  manual_adjustment
+}
+Enum support_ticket_status {
+  open
+  waiting_on_user
+  waiting_on_support
+  resolved
+  closed
+}
+Enum subscription_status {
+  pending
+  active
+  expired
+  cancelled
+  refunded
+}
+Enum referral_reward_type {
+  account_activation
+  deposit_commission
+  task_commission
+}
+Enum referral_reward_status {
+  pending
+  posted
+  reversed
+  rejected
+}
+Enum support_channel {
+  ticket
+  live_chat
+}
+Enum support_message_type {
+  user_message
+  staff_message
+  system_event
+}
+Enum prize_draw_status {
+  draft
+  scheduled
+  sales_open
+  sales_closed
+  drawing
+  completed
+  cancelled
+}
+Enum search_index_operation {
+  upsert
+  delete
+}
+Enum search_document_type {
+  job
+  user
+}
+Enum search_index_event_status {
+  pending
+  processing
+  completed
+  failed
+}
+
+Table identity_liveness_checks {
+  id bigint [pk, increment]
+  identity_verification_id bigint [not null]
+  video_media_file_id bigint [unique]
+  challenge_text varchar(255) [not null]
+  challenge_token_hash varchar(64) [not null, unique]
+  challenge_expires_at timestamp [not null]
+  challenge_consumed_at timestamp
+  consent_version varchar(50) [not null]
+  consented_at timestamp [not null]
+  status liveness_status [not null, default: 'issued']
+  review_method varchar(30) [not null, default: 'manual']
+  provider varchar(100)
+  provider_reference varchar(255)
+  reviewed_by_user_id bigint
+  failure_reason text
+  submitted_at timestamp
+  reviewed_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  Note: 'Create before recording; consume challenge once atomically before expiry. Video required at submission, private purpose identity_liveness_video, owned by applicant. Browser recording is not proof against replay/deepfakes; reviewer/provider must validate challenge and face match. Approval requires passed liveness and document review. Retention is on media_files.delete_after; deletion timestamp means actual R2 deletion.'
+}
+Table identity_reviews {
+  id bigint [pk, increment]
+  identity_verification_id bigint [not null]
+  reviewer_user_id bigint [not null]
+  decision review_decision [not null]
+  reason text
+  created_at timestamp [not null]
+  Note: 'Append-only. Reviewer must be an authorized administrator.'
+}
+Table job_categories {
+  id bigint [pk, increment]
+  parent_id bigint
+  name varchar(150) [not null]
+  slug varchar(150) [not null, unique]
+}
+Table jobs {
+  id bigint [pk, increment]
+  buyer_user_id bigint [not null]
+  category_id bigint [not null]
+  title varchar(200) [not null]
+  description text [not null]
+  buyer_private_note text
+  target_url text
+  location_policy job_location_policy [not null, default: 'all_supported']
+  status job_status [not null, default: 'draft']
+  reward_usd_cents bigint [not null]
+  fee_per_approval_usd_cents bigint [not null, default: 0]
+  worker_limit integer [not null]
+  work_time_limit_seconds integer [not null]
+  review_time_limit_seconds integer [not null]
+  scheduled_at timestamp
+  deadline_at timestamp [not null]
+  published_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  indexes {
+    (buyer_user_id, status)
+    (status, published_at)
+  }
+  Note: 'Positive reward, worker_limit and time limits; fees nonnegative. buyer_private_note is visible only to the owning buyer and authorized admin. Publishing requires escrow funding. Freeze instructions and proof requirements after first claim. Reward may only increase through job_reward_increases with additional escrow funding; it cannot decrease. Atomic claims enforce schedule, capacity, country policy, deadline and no buyer self-claim. Completed counts derive from participations.'
+}
+Table job_reward_increases {
+  id bigint [pk, increment]
+  job_id bigint [not null]
+  buyer_user_id bigint [not null]
+  old_reward_usd_cents bigint [not null]
+  new_reward_usd_cents bigint [not null]
+  affected_open_slots integer [not null]
+  affected_participations integer [not null, default: 0]
+  additional_funding_usd_cents bigint [not null]
+  funding_transaction_id bigint [not null, unique]
+  created_at timestamp [not null]
+  indexes {
+    (job_id, created_at)
+  }
+  Note: 'Immutable increase only: new reward must exceed old reward and buyer_user_id must own the job. Atomically fund the calculated escrow difference, update jobs.reward_usd_cents and update every eligible reserved/unsubmitted participation snapshot according to one documented policy. Never reduce or rewrite approved earnings.'
+}
+Table job_promotion_plans {
+  id bigint [pk, increment]
+  name varchar(100) [not null]
+  duration_days integer [not null]
+  price_usd_cents bigint [not null]
+  placement varchar(50) [not null, default: 'top_jobs']
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  Note: 'Administrator-managed positive price and duration. A plan controls placement eligibility, not job approval or worker reward.'
+}
+Table job_promotions {
+  id bigint [pk, increment]
+  job_id bigint [not null]
+  buyer_user_id bigint [not null]
+  plan_id bigint [not null]
+  plan_name varchar(100) [not null]
+  placement varchar(50) [not null]
+  duration_days integer [not null]
+  price_usd_cents bigint [not null]
+  purchase_transaction_id bigint [not null, unique]
+  starts_at timestamp [not null]
+  ends_at timestamp [not null]
+  cancelled_at timestamp
+  created_at timestamp [not null]
+  indexes {
+    (job_id, starts_at, ends_at)
+    (placement, starts_at, ends_at)
+  }
+  Note: 'Immutable commercial snapshot. Job must be owned, approved and publishable; activation requires an atomic wallet debit. Top/pinned state is derived from an active time range, never an editable jobs counter/flag.'
+}
+Table search_index_events {
+  id bigint [pk, increment]
+  entity_type search_document_type [not null]
+  entity_id bigint [not null]
+  operation search_index_operation [not null]
+  status search_index_event_status [not null, default: 'pending']
+  source_version varchar(100) [not null]
+  attempts integer [not null, default: 0]
+  available_at timestamp [not null]
+  locked_at timestamp
+  completed_at timestamp
+  last_error_code varchar(100)
+  created_at timestamp [not null]
+  indexes {
+    (status, available_at, id)
+    (entity_type, entity_id, source_version, operation) [unique]
+  }
+  Note: 'Transactional outbox written in the same transaction as searchable source changes. Workers claim with a lease, retry idempotently with backoff and discard stale versions. Store only a bounded error code, never source content or secrets.'
+}
+Table job_countries {
+  job_id bigint [not null]
+  country_code char(2) [not null]
+  indexes {
+    (job_id, country_code) [pk]
+  }
+  Note: 'Interpret with jobs.location_policy. Empty is allowed only for all_supported; include_only permits listed countries and exclude blocks listed countries.'
+}
+Table job_steps {
+  id bigint [pk, increment]
+  job_id bigint [not null]
+  position integer [not null]
+  instruction text [not null]
+  indexes {
+    (job_id, position) [unique]
+  }
+}
+Table job_attachments {
+  job_id bigint [not null]
+  media_file_id bigint [not null]
+  kind job_attachment_kind [not null, default: 'instruction']
+  position integer [not null, default: 1]
+  indexes {
+    (job_id, media_file_id) [pk]
+    (job_id, kind, position) [unique]
+  }
+}
+Table job_proof_requirements {
+  id bigint [pk, increment]
+  job_id bigint [not null]
+  position integer [not null]
+  type proof_type [not null]
+  label varchar(150) [not null]
+  instructions text
+  is_required boolean [not null, default: true]
+  maximum_files integer [not null, default: 1]
+  maximum_size_bytes bigint
+  maximum_text_length integer
+  allowed_mime_types json
+  indexes {
+    (job_id, position) [unique]
+  }
+}
+Table job_participations {
+  id bigint [pk, increment]
+  job_id bigint [not null]
+  worker_user_id bigint [not null]
+  status participation_status [not null, default: 'reserved']
+  reward_usd_cents bigint [not null]
+  fee_usd_cents bigint [not null]
+  work_deadline_at timestamp [not null]
+  joined_at timestamp [not null]
+  updated_at timestamp [not null]
+  indexes {
+    (job_id, worker_user_id) [unique]
+    (worker_user_id, status)
+    (job_id, status)
+  }
+  Note: 'Canonical workflow state; snapshot agreed reward and fee on claim. Expired reservations release capacity. No duplicate claim rows.'
+}
+Table submissions {
+  id bigint [pk, increment]
+  participation_id bigint [not null]
+  revision_number integer [not null]
+  worker_note text
+  submitted_at timestamp [not null]
+  indexes {
+    (participation_id, revision_number) [unique]
+  }
+  Note: 'Each submitted revision and its proofs are immutable. Changes requested creates next revision; previous evidence is preserved. Participation holds current state.'
+}
+Table submission_proofs {
+  id bigint [pk, increment]
+  submission_id bigint [not null]
+  requirement_id bigint [not null]
+  text_value text
+  url_value text
+  indexes {
+    (submission_id, requirement_id) [unique]
+  }
+  Note: 'Requirement must belong to participation job. Text or URL is required only for matching type; file types use submission_proof_files. Required requirements must all be satisfied before accepting revision.'
+}
+Table submission_proof_files {
+  proof_id bigint [not null]
+  media_file_id bigint [not null]
+  position integer [not null]
+  indexes {
+    (proof_id, media_file_id) [pk]
+    (proof_id, position) [unique]
+  }
+  Note: 'Supports multiple screenshots up to requirement.maximum_files. Server checks owner, ready state, private submission_proof purpose, MIME and size. Access only worker, owning buyer and authorized admin.'
+}
+Table submission_reviews {
+  id bigint [pk, increment]
+  submission_id bigint [not null, unique]
+  reviewer_user_id bigint [not null]
+  decision review_decision [not null]
+  reason text
+  created_at timestamp [not null]
+  Note: 'One immutable decision per revision, by owning buyer or authorized admin. Review latest submitted revision only. Approval, participation update, escrow debit, worker credit and fee entries commit atomically once.'
+}
+Table media_duplicate_flags {
+  id bigint [pk, increment]
+  media_file_id bigint [not null]
+  matched_media_file_id bigint [not null]
+  status varchar(20) [not null, default: 'pending']
+  reason text [not null]
+  reviewed_by_user_id bigint
+  created_at timestamp [not null]
+  reviewed_at timestamp
+  indexes {
+    (media_file_id, matched_media_file_id) [unique]
+  }
+  Note: 'Server-only exact checksum risk signal; no self-match or automatic ban. Never disclose another account or reuse private media across owners.'
+}
+Table ledger_accounts {
+  id bigint [pk, increment]
+  account_key varchar(100) [not null, unique]
+  user_id bigint
+  job_id bigint
+  kind account_kind [not null]
+  currency char(3) [not null, default: 'USD']
+  created_at timestamp [not null]
+  Note: 'USD only. Deterministic account_key enforces one account per owner and kind, e.g. user:201:available, user:201:locked, job:1001:escrow. User kinds require user_id only; escrow requires job_id only; system accounts have neither. Balance derives from posted entries.'
+}
+Table ledger_transactions {
+  id bigint [pk, increment]
+  kind ledger_kind [not null]
+  idempotency_key varchar(150) [not null, unique]
+  submission_review_id bigint [unique]
+  reversal_of_id bigint [unique]
+  created_at timestamp [not null]
+  Note: 'Posted immutable transactions only. At least two entries; sum signed amount_usd_cents = 0. Lock/check spendable accounts to prevent overdraft. Reversals are new balancing transactions, never edits.'
+}
+Table ledger_entries {
+  id bigint [pk, increment]
+  transaction_id bigint [not null]
+  account_id bigint [not null]
+  amount_usd_cents bigint [not null]
+  created_at timestamp [not null]
+  indexes {
+    (account_id, id)
+    transaction_id
+  }
+  Note: 'Nonzero signed integer cents; positive increases account balance. Append-only.'
+}
+Table payment_provider_configs {
+  id bigint [pk, increment]
+  provider_code varchar(50) [not null, unique]
+  display_name varchar(100) [not null]
+  deposit_enabled boolean [not null, default: false]
+  withdrawal_enabled boolean [not null, default: false]
+  deposit_fee_bps integer [not null, default: 0, note: 'Basis points; 190 means 1.90 percent']
+  minimum_deposit_usd_cents bigint [not null]
+  maximum_deposit_usd_cents bigint
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  Note: 'Admin-managed capability and pricing defaults. A quote snapshots the actual rate and fee; config changes never rewrite accepted quotes.'
+}
+Table deposit_quotes {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  provider_config_id bigint [not null]
+  credit_usd_cents bigint [not null]
+  exchange_rate_micros bigint [not null, note: 'BDT per USD multiplied by 1000000']
+  base_bdt_poisha bigint [not null]
+  fee_bps integer [not null]
+  fee_bdt_poisha bigint [not null]
+  payable_bdt_poisha bigint [not null]
+  rate_source varchar(100) [not null]
+  expires_at timestamp [not null]
+  accepted_at timestamp
+  created_at timestamp [not null]
+  Note: 'Immutable quote. base poisha = floor(credit USD cents * rate micros / 1000000); fee poisha = ceil(base poisha * fee bps / 10000); payable = base + fee. Accept once before expiry. Rate and fee displayed by another site are observations, not Microjobsworks configuration.'
+}
+Table deposit_payments {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  quote_id bigint [not null, unique]
+  provider varchar(100) [not null]
+  provider_reference varchar(255)
+  idempotency_key varchar(150) [not null, unique]
+  status transfer_status [not null, default: 'pending']
+  credit_transaction_id bigint [unique]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  settled_at timestamp
+  failed_at timestamp
+  cancelled_at timestamp
+  indexes {
+    (provider, provider_reference) [unique]
+  }
+  Note: 'Payment is created only from an accepted unexpired owned quote. Credit exactly once after verified provider settlement matches provider, BDT payable amount, currency and reference. Cancelled browser return is not authoritative failure. Unknown and late payments require reconciliation.'
+}
+Table payout_methods {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  provider varchar(100) [not null, note: 'Configured supported provider; e.g. bkash, nagad, bank']
+  account_number_encrypted text [not null]
+  account_number_hmac varchar(64) [not null]
+  account_number_masked varchar(50) [not null]
+  holder_name_encrypted text
+  status varchar(30) [not null, default: 'pending_verification']
+  verified_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  indexes {
+    (user_id, provider, account_number_hmac) [unique]
+  }
+}
+Table withdrawal_quotes {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  payout_method_id bigint [not null]
+  amount_usd_cents bigint [not null]
+  exchange_rate_micros bigint [not null]
+  gross_bdt_poisha bigint [not null]
+  fee_bdt_poisha bigint [not null]
+  net_bdt_poisha bigint [not null]
+  service_level varchar(20) [not null, default: 'standard']
+  estimated_delivery_seconds integer
+  rate_source varchar(100) [not null]
+  expires_at timestamp [not null]
+  accepted_at timestamp
+  created_at timestamp [not null]
+  Note: 'Immutable pricing. Gross poisha = floor(amount_usd_cents * exchange_rate_micros / 1000000); net = gross - fee > 0. Use wide integer arithmetic. Accept once before expiry; show rate, fee, net and estimated delivery. Service-level fees must be included in the quote.'
+}
+Table withdrawals {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  quote_id bigint [not null, unique]
+  destination_provider varchar(100) [not null]
+  destination_encrypted text [not null]
+  destination_masked varchar(50) [not null]
+  status transfer_status [not null, default: 'pending']
+  lock_transaction_id bigint [not null, unique]
+  settlement_transaction_id bigint [unique]
+  release_transaction_id bigint [unique]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  paid_at timestamp
+  Note: 'Accept quote, verify ownership, approved identity, verified destination and funds, snapshot destination and transfer available to locked atomically. Success consumes locked funds; definitive failure/cancel releases once. Unknown/timeout stays locked until reconciliation. Settlement and release mutually exclusive; post-payment reversals are separate ledger transactions.'
+}
+Table payout_attempts {
+  id bigint [pk, increment]
+  withdrawal_id bigint [not null]
+  attempt_number integer [not null]
+  provider varchar(100) [not null]
+  provider_reference varchar(255)
+  idempotency_key varchar(150) [not null, unique]
+  status transfer_status [not null, default: 'pending']
+  failure_code varchar(100)
+  submitted_at timestamp
+  completed_at timestamp
+  created_at timestamp [not null]
+  indexes {
+    (withdrawal_id, attempt_number) [unique]
+    (provider, provider_reference) [unique]
+  }
+  Note: 'Network retry of an uncertain request reuses same attempt/key. New attempt only after authoritative terminal failure confirms no payment. Provider integration requires contracted payout capability.'
+}
+Table payment_webhook_events {
+  id bigint [pk, increment]
+  provider varchar(100) [not null]
+  provider_event_id varchar(255) [not null]
+  deposit_payment_id bigint
+  payout_attempt_id bigint
+  payload_hash varchar(64) [not null]
+  status varchar(20) [not null, default: 'received']
+  received_at timestamp [not null]
+  processed_at timestamp
+  indexes {
+    (provider, provider_event_id) [unique]
+  }
+  Note: 'Verify signature before ingestion; one target only. Deduplicate and reconcile out-of-order events against authoritative provider status. No credentials or raw sensitive payloads.'
+}
+Table advertisement_plans {
+  id bigint [pk, increment]
+  name varchar(100) [not null]
+  duration_days integer [not null]
+  price_usd_cents bigint [not null]
+  maximum_width integer [not null, default: 1000]
+  maximum_height integer [not null, default: 500]
+  allowed_mime_types json [not null, note: 'Server-controlled array, for example image/jpeg and image/png']
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  indexes {
+    (is_active, duration_days)
+  }
+  Note: 'Administrator-managed catalog. Positive duration and USD cents are validated by the server. Editing a plan never changes an existing advertisement snapshot.'
+}
+Table advertisements {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  plan_id bigint [not null]
+  banner_media_file_id bigint [not null, unique]
+  title varchar(200) [not null]
+  destination_url varchar(2048) [not null]
+  status advertisement_status [not null, default: 'draft']
+  revision_number integer [not null, default: 1]
+  duration_days integer [not null]
+  price_usd_cents bigint [not null]
+  purchase_transaction_id bigint [unique]
+  requested_start_at timestamp
+  starts_at timestamp
+  ends_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  cancelled_at timestamp
+  indexes {
+    (user_id, status, created_at)
+    (status, starts_at, ends_at)
+  }
+  Note: 'Any active authenticated ordinary user may create an ad; buyer/worker mode is irrelevant. Snapshot duration and price from an active plan. Server permits only approved destination schemes/domains and a ready, public advertisement_banner owned by the user within plan MIME/dimension limits. Approval and wallet debit must both succeed before scheduling or activation.'
+}
+Table advertisement_reviews {
+  id bigint [pk, increment]
+  advertisement_id bigint [not null]
+  revision_number integer [not null]
+  reviewer_user_id bigint [not null]
+  decision advertisement_review_decision [not null]
+  reason text
+  created_at timestamp [not null]
+  indexes {
+    (advertisement_id, revision_number) [unique]
+  }
+  Note: 'Immutable administrator decision for one content revision. Editing rejected content increments the advertisement revision and requires a new review. A rejection reason is required.'
+}
+Table advertisement_daily_metrics {
+  advertisement_id bigint [not null]
+  metric_date date [not null]
+  impressions bigint [not null, default: 0]
+  clicks bigint [not null, default: 0]
+  indexes {
+    (advertisement_id, metric_date) [pk]
+  }
+  Note: 'Aggregated nonnegative counters, not raw visitor identifiers. Click redirects are validated server-side; reporting must not expose viewer identity.'
+}
+Table subscription_plans {
+  id bigint [pk, increment]
+  name varchar(100) [not null]
+  duration_days integer [not null]
+  price_usd_cents bigint [not null]
+  benefits json [not null, note: 'Server-controlled benefit keys; UI labels are presentation data']
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  Note: 'Administrator-managed positive duration and USD-cent price. WorkUpJob displayed one month at 5 USD on the review date, but that third-party value is not a Microjobsworks default.'
+}
+Table user_subscriptions {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  plan_id bigint [not null]
+  status subscription_status [not null, default: 'pending']
+  plan_name varchar(100) [not null]
+  duration_days integer [not null]
+  price_usd_cents bigint [not null]
+  benefits json [not null]
+  purchase_transaction_id bigint [not null, unique]
+  starts_at timestamp
+  ends_at timestamp
+  cancelled_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  indexes {
+    (user_id, status, ends_at)
+  }
+  Note: 'Immutable commercial snapshot. Activate exactly once after an atomic wallet debit. Overlapping purchases require an explicit extension/queue policy; UI must not infer entitlement from preferred_mode.'
+}
+Table referral_codes {
+  id bigint [pk, increment]
+  owner_user_id bigint [not null, unique]
+  code varchar(64) [not null, unique]
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+  Note: 'Opaque share code; never expose sequential user IDs in referral links.'
+}
+Table referrals {
+  id bigint [pk, increment]
+  referrer_user_id bigint [not null]
+  referred_user_id bigint [not null, unique]
+  referral_code_id bigint [not null]
+  attributed_at timestamp [not null]
+  qualified_at timestamp
+  created_at timestamp [not null]
+  indexes {
+    (referrer_user_id, attributed_at)
+  }
+  Note: 'First valid attribution only. Self-referral, referral chains created after signup, duplicate identities/devices and administrator accounts are rejected by server policy; IP alone is never decisive.'
+}
+Table referral_reward_rules {
+  id bigint [pk, increment]
+  reward_type referral_reward_type [not null]
+  fixed_usd_cents bigint
+  rate_bps integer
+  maximum_reward_usd_cents bigint
+  effective_from timestamp [not null]
+  effective_to timestamp
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+  Note: 'Versioned administrator rule. Exactly one of fixed USD cents or basis-point rate applies. Third-party percentages observed at WorkUpJob are not copied as defaults.'
+}
+Table referral_rewards {
+  id bigint [pk, increment]
+  referral_id bigint [not null]
+  rule_id bigint [not null]
+  source_entity_type varchar(50) [not null]
+  source_entity_id bigint [not null]
+  amount_usd_cents bigint [not null]
+  status referral_reward_status [not null, default: 'pending']
+  ledger_transaction_id bigint [unique]
+  created_at timestamp [not null]
+  posted_at timestamp
+  indexes {
+    (referral_id, rule_id, source_entity_type, source_entity_id) [unique]
+  }
+  Note: 'Server verifies the qualifying settled event and snapshots one positive reward. Post once with an idempotent balanced ledger transaction; reversal is a new ledger transaction.'
+}
+Table prize_draws {
+  id bigint [pk, increment]
+  name varchar(150) [not null]
+  status prize_draw_status [not null, default: 'draft']
+  ticket_price_usd_cents bigint [not null]
+  sales_start_at timestamp
+  sales_end_at timestamp
+  draw_at timestamp
+  randomness_commitment varchar(128)
+  randomness_reveal text
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  Note: 'Feature remains disabled until jurisdiction, age, licensing, responsible-use, refund and tax requirements are approved. Drawing requires a published auditable randomness procedure; administrator choice alone cannot select winners.'
+}
+Table prize_draw_tiers {
+  id bigint [pk, increment]
+  prize_draw_id bigint [not null]
+  rank integer [not null]
+  prize_usd_cents bigint [not null]
+  indexes {
+    (prize_draw_id, rank) [unique]
+  }
+}
+Table prize_ticket_orders {
+  id bigint [pk, increment]
+  prize_draw_id bigint [not null]
+  user_id bigint [not null]
+  quantity integer [not null]
+  unit_price_usd_cents bigint [not null]
+  total_usd_cents bigint [not null]
+  purchase_transaction_id bigint [not null, unique]
+  first_ticket_number bigint [not null]
+  last_ticket_number bigint [not null]
+  created_at timestamp [not null]
+  indexes {
+    (prize_draw_id, first_ticket_number, last_ticket_number)
+    (user_id, created_at)
+  }
+  Note: 'Immutable successful purchase only. Quantity and contiguous range must agree; allocate non-overlapping ticket numbers and debit the wallet atomically.'
+}
+Table prize_draw_winners {
+  id bigint [pk, increment]
+  prize_draw_id bigint [not null]
+  tier_id bigint [not null, unique]
+  user_id bigint [not null]
+  winning_ticket_number bigint [not null]
+  prize_usd_cents bigint [not null]
+  payout_transaction_id bigint [not null, unique]
+  selected_at timestamp [not null]
+  paid_at timestamp [not null]
+  indexes {
+    (prize_draw_id, winning_ticket_number) [unique]
+  }
+  Note: 'Winner must own the ticket in this draw. Prize amount snapshots the tier and posts exactly once through the ledger.'
+}
+Table audit_events {
+  id bigint [pk, increment]
+  actor_user_id bigint
+  entity_type varchar(50) [not null]
+  entity_id bigint [not null]
+  action varchar(100) [not null]
+  from_status varchar(50)
+  to_status varchar(50)
+  reason text
+  created_at timestamp [not null]
+  indexes {
+    (entity_type, entity_id, created_at)
+  }
+  Note: 'Append-only business status history recorded in the same transaction as change. No secret or private document data.'
+}
+Table notifications {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  type varchar(50) [not null]
+  title varchar(200) [not null]
+  body text [not null]
+  entity_type varchar(50)
+  entity_id bigint
+  read_at timestamp
+  expires_at timestamp
+  created_at timestamp [not null]
+  indexes {
+    (user_id, read_at, created_at)
+    expires_at
+  }
+  Note: 'Notification is an inbox projection, not the business source of truth. Access is owner-only; expiration supports cleanup.'
+}
+Table user_reviews {
+  id bigint [pk, increment]
+  participation_id bigint [not null]
+  reviewer_user_id bigint [not null]
+  reviewee_user_id bigint [not null]
+  rating smallint [not null, note: 'Application-enforced integer from 1 to 5']
+  comment text
+  created_at timestamp [not null]
+  indexes {
+    (participation_id, reviewer_user_id) [unique]
+    (reviewee_user_id, created_at)
+  }
+  Note: 'Reviewer must be the owning buyer or participating worker, reviewee must be the counterparty, and participation must be approved/completed. Ratings and counts shown on profiles derive from these rows.'
+}
+Table moderation_cases {
+  id bigint [pk, increment]
+  reporter_user_id bigint [not null]
+  subject_user_id bigint
+  job_id bigint
+  participation_id bigint
+  submission_id bigint
+  type varchar(50) [not null]
+  status moderation_case_status [not null, default: 'open']
+  description text [not null]
+  assigned_admin_user_id bigint
+  resolution text
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  resolved_at timestamp
+  indexes {
+    (reporter_user_id, created_at)
+    (status, created_at)
+  }
+  Note: 'At least one subject context is required. Server verifies the reporter is connected to private job/submission context. Reports never directly ban users or release money.'
+}
+Table moderation_case_media {
+  case_id bigint [not null]
+  media_file_id bigint [not null]
+  indexes {
+    (case_id, media_file_id) [pk]
+  }
+}
+Table user_enforcement_actions {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  case_id bigint
+  action enforcement_action_type [not null]
+  reason text [not null]
+  issued_by_admin_user_id bigint [note: 'Required for manual actions; null only for a policy-engine automatic action']
+  is_automatic boolean [not null, default: false]
+  starts_at timestamp [not null]
+  expires_at timestamp
+  revoked_at timestamp
+  revoked_by_admin_user_id bigint
+  created_at timestamp [not null]
+  indexes {
+    (user_id, revoked_at, starts_at)
+  }
+  Note: 'Append-only moderation decision. Manual actions require issued_by_admin_user_id and is_automatic false. Policy-engine actions require null issuer and is_automatic true. The third active warning or health score reaching zero creates one automatic ban action and synchronizes users.status plus audit_events transactionally.'
+}
+Table account_health_policies {
+  id bigint [pk, increment]
+  name varchar(100) [not null]
+  initial_score smallint [not null, default: 100]
+  minimum_score smallint [not null, default: 0]
+  maximum_score smallint [not null, default: 100]
+  warning_score_threshold smallint [not null, default: 70]
+  warning_repeat_after_seconds integer [not null, default: 259200, note: '72 hours by default']
+  ban_score_threshold smallint [not null, default: 0]
+  maximum_active_warnings smallint [not null, default: 3]
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  Note: 'Versioned policy. Application enforces 0 <= minimum <= ban <= warning < maximum, initial within range, positive repeat interval, and maximum_active_warnings = 3 under the current product rule. Existing events keep their policy reference when a new policy is activated.'
+}
+Table user_account_health {
+  user_id bigint [pk]
+  policy_id bigint [not null]
+  score smallint [not null, default: 100]
+  active_warning_count smallint [not null, default: 0]
+  version bigint [not null, default: 1]
+  last_warning_at timestamp
+  evaluated_at timestamp [not null]
+  updated_at timestamp [not null]
+  Note: 'Fast current projection shared by buyer/worker activity; score is clamped to policy range and warning count must equal active warning enforcement actions. Lock this row during a health transition. Score zero or three active warnings atomically bans the user. Rebuildable from health/enforcement events.'
+}
+Table account_health_events {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  policy_id bigint [not null]
+  event_type account_health_event_type [not null]
+  source_entity_type varchar(50) [not null]
+  source_entity_id bigint [not null]
+  score_before smallint [not null]
+  score_delta smallint [not null, default: 0]
+  score_after smallint [not null]
+  warning_count_after smallint [not null]
+  enforcement_action_id bigint [unique]
+  idempotency_key varchar(150) [not null, unique]
+  reason_code varchar(100) [not null]
+  created_at timestamp [not null]
+  indexes {
+    (user_id, created_at)
+    (source_entity_type, source_entity_id)
+  }
+  Note: 'Immutable event ledger. Validate score_after = clamp(score_before + score_delta), and serialize per user. A warning event links its warning action; an automatic_ban event links the single automatic ban action. Retry uses the same idempotency key and cannot add another warning or ban.'
+}
+Table support_tickets {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  channel support_channel [not null, default: 'ticket']
+  subject varchar(200) [not null]
+  category varchar(50) [not null]
+  priority varchar(20) [not null, default: 'normal']
+  status support_ticket_status [not null, default: 'open']
+  assigned_admin_user_id bigint
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  resolved_at timestamp
+  indexes {
+    (user_id, status, updated_at)
+    (status, priority, updated_at)
+  }
+}
+Table support_ticket_messages {
+  id bigint [pk, increment]
+  ticket_id bigint [not null]
+  sender_user_id bigint [not null]
+  message_type support_message_type [not null]
+  client_message_id varchar(100)
+  body text [not null]
+  created_at timestamp [not null]
+  indexes {
+    (ticket_id, created_at)
+    (ticket_id, sender_user_id, client_message_id) [unique]
+  }
+  Note: 'Sender must be ticket owner or an active support participant. Messages are append-only. client_message_id makes realtime retries idempotent; it is nullable for system/imported events.'
+}
+Table support_ticket_participants {
+  ticket_id bigint [not null]
+  user_id bigint [not null]
+  joined_at timestamp [not null]
+  left_at timestamp
+  last_read_message_id bigint
+  indexes {
+    (ticket_id, user_id) [pk]
+  }
+  Note: 'Ticket owner and authorized support staff only. Online presence and typing indicators are ephemeral realtime state, not durable database rows.'
+}
+Table support_ticket_message_media {
+  message_id bigint [not null]
+  media_file_id bigint [not null]
+  indexes {
+    (message_id, media_file_id) [pk]
+  }
+}
+
+Ref: identity_liveness_checks.identity_verification_id > identity_verifications.id [delete: restrict, update: cascade]
+Ref: identity_liveness_checks.reviewed_by_user_id >? users.id [delete: restrict, update: cascade]
+Ref: identity_reviews.identity_verification_id > identity_verifications.id [delete: restrict, update: cascade]
+Ref: identity_reviews.reviewer_user_id > users.id [delete: restrict, update: cascade]
+Ref: jobs.buyer_user_id > users.id [delete: restrict, update: cascade]
+Ref: jobs.category_id > job_categories.id [delete: restrict, update: cascade]
+Ref: job_reward_increases.job_id > jobs.id [delete: restrict, update: cascade]
+Ref: job_reward_increases.buyer_user_id > users.id [delete: restrict, update: cascade]
+Ref: job_promotions.job_id > jobs.id [delete: restrict, update: cascade]
+Ref: job_promotions.buyer_user_id > users.id [delete: restrict, update: cascade]
+Ref: job_promotions.plan_id > job_promotion_plans.id [delete: restrict, update: cascade]
+Ref: job_categories.parent_id >? job_categories.id [delete: restrict, update: cascade]
+Ref: job_countries.job_id > jobs.id [delete: restrict, update: cascade]
+Ref: job_steps.job_id > jobs.id [delete: restrict, update: cascade]
+Ref: job_attachments.job_id > jobs.id [delete: restrict, update: cascade]
+Ref: job_attachments.media_file_id > media_files.id [delete: restrict, update: cascade]
+Ref: job_proof_requirements.job_id > jobs.id [delete: restrict, update: cascade]
+Ref: job_participations.job_id > jobs.id [delete: restrict, update: cascade]
+Ref: job_participations.worker_user_id > users.id [delete: restrict, update: cascade]
+Ref: submissions.participation_id > job_participations.id [delete: restrict, update: cascade]
+Ref: submission_proofs.submission_id > submissions.id [delete: restrict, update: cascade]
+Ref: submission_proofs.requirement_id > job_proof_requirements.id [delete: restrict, update: cascade]
+Ref: submission_proof_files.proof_id > submission_proofs.id [delete: restrict, update: cascade]
+Ref: submission_proof_files.media_file_id > media_files.id [delete: restrict, update: cascade]
+Ref: submission_reviews.reviewer_user_id > users.id [delete: restrict, update: cascade]
+Ref: media_duplicate_flags.media_file_id > media_files.id [delete: restrict, update: cascade]
+Ref: media_duplicate_flags.matched_media_file_id > media_files.id [delete: restrict, update: cascade]
+Ref: media_duplicate_flags.reviewed_by_user_id >? users.id [delete: restrict, update: cascade]
+Ref: ledger_accounts.user_id >? users.id [delete: restrict, update: cascade]
+Ref: ledger_accounts.job_id >? jobs.id [delete: restrict, update: cascade]
+Ref: ledger_entries.transaction_id > ledger_transactions.id [delete: restrict, update: cascade]
+Ref: ledger_entries.account_id > ledger_accounts.id [delete: restrict, update: cascade]
+Ref: deposit_quotes.user_id > users.id [delete: restrict, update: cascade]
+Ref: deposit_quotes.provider_config_id > payment_provider_configs.id [delete: restrict, update: cascade]
+Ref: deposit_payments.user_id > users.id [delete: restrict, update: cascade]
+Ref: payout_methods.user_id > users.id [delete: restrict, update: cascade]
+Ref: withdrawal_quotes.user_id > users.id [delete: restrict, update: cascade]
+Ref: withdrawal_quotes.payout_method_id > payout_methods.id [delete: restrict, update: cascade]
+Ref: withdrawals.user_id > users.id [delete: restrict, update: cascade]
+Ref: payout_attempts.withdrawal_id > withdrawals.id [delete: restrict, update: cascade]
+Ref: payment_webhook_events.deposit_payment_id >? deposit_payments.id [delete: restrict, update: cascade]
+Ref: payment_webhook_events.payout_attempt_id >? payout_attempts.id [delete: restrict, update: cascade]
+Ref: advertisements.user_id > users.id [delete: restrict, update: cascade]
+Ref: advertisements.plan_id > advertisement_plans.id [delete: restrict, update: cascade]
+Ref: advertisements.banner_media_file_id - media_files.id [delete: restrict, update: cascade]
+Ref: advertisement_reviews.advertisement_id > advertisements.id [delete: restrict, update: cascade]
+Ref: advertisement_reviews.reviewer_user_id > users.id [delete: restrict, update: cascade]
+Ref: advertisement_daily_metrics.advertisement_id > advertisements.id [delete: restrict, update: cascade]
+Ref: user_subscriptions.user_id > users.id [delete: restrict, update: cascade]
+Ref: user_subscriptions.plan_id > subscription_plans.id [delete: restrict, update: cascade]
+Ref: referral_codes.owner_user_id > users.id [delete: restrict, update: cascade]
+Ref: referrals.referrer_user_id > users.id [delete: restrict, update: cascade]
+Ref: referrals.referred_user_id > users.id [delete: restrict, update: cascade]
+Ref: referrals.referral_code_id > referral_codes.id [delete: restrict, update: cascade]
+Ref: referral_rewards.referral_id > referrals.id [delete: restrict, update: cascade]
+Ref: referral_rewards.rule_id > referral_reward_rules.id [delete: restrict, update: cascade]
+Ref: prize_draw_tiers.prize_draw_id > prize_draws.id [delete: restrict, update: cascade]
+Ref: prize_ticket_orders.prize_draw_id > prize_draws.id [delete: restrict, update: cascade]
+Ref: prize_ticket_orders.user_id > users.id [delete: restrict, update: cascade]
+Ref: prize_draw_winners.prize_draw_id > prize_draws.id [delete: restrict, update: cascade]
+Ref: prize_draw_winners.tier_id > prize_draw_tiers.id [delete: restrict, update: cascade]
+Ref: prize_draw_winners.user_id > users.id [delete: restrict, update: cascade]
+Ref: audit_events.actor_user_id >? users.id [delete: restrict, update: cascade]
+Ref: notifications.user_id > users.id [delete: restrict, update: cascade]
+Ref: user_reviews.participation_id > job_participations.id [delete: restrict, update: cascade]
+Ref: user_reviews.reviewer_user_id > users.id [delete: restrict, update: cascade]
+Ref: user_reviews.reviewee_user_id > users.id [delete: restrict, update: cascade]
+Ref: moderation_cases.reporter_user_id > users.id [delete: restrict, update: cascade]
+Ref: moderation_cases.subject_user_id >? users.id [delete: restrict, update: cascade]
+Ref: moderation_cases.job_id >? jobs.id [delete: restrict, update: cascade]
+Ref: moderation_cases.participation_id >? job_participations.id [delete: restrict, update: cascade]
+Ref: moderation_cases.submission_id >? submissions.id [delete: restrict, update: cascade]
+Ref: moderation_cases.assigned_admin_user_id >? users.id [delete: restrict, update: cascade]
+Ref: moderation_case_media.case_id > moderation_cases.id [delete: restrict, update: cascade]
+Ref: moderation_case_media.media_file_id > media_files.id [delete: restrict, update: cascade]
+Ref: user_enforcement_actions.user_id > users.id [delete: restrict, update: cascade]
+Ref: user_enforcement_actions.case_id >? moderation_cases.id [delete: restrict, update: cascade]
+Ref: user_enforcement_actions.issued_by_admin_user_id >? users.id [delete: restrict, update: cascade]
+Ref: user_enforcement_actions.revoked_by_admin_user_id >? users.id [delete: restrict, update: cascade]
+Ref: user_account_health.user_id - users.id [delete: restrict, update: cascade]
+Ref: user_account_health.policy_id > account_health_policies.id [delete: restrict, update: cascade]
+Ref: account_health_events.user_id > users.id [delete: restrict, update: cascade]
+Ref: account_health_events.policy_id > account_health_policies.id [delete: restrict, update: cascade]
+Ref: account_health_events.enforcement_action_id >? user_enforcement_actions.id [delete: restrict, update: cascade]
+Ref: support_tickets.user_id > users.id [delete: restrict, update: cascade]
+Ref: support_tickets.assigned_admin_user_id >? users.id [delete: restrict, update: cascade]
+Ref: support_ticket_messages.ticket_id > support_tickets.id [delete: restrict, update: cascade]
+Ref: support_ticket_messages.sender_user_id > users.id [delete: restrict, update: cascade]
+Ref: support_ticket_participants.ticket_id > support_tickets.id [delete: restrict, update: cascade]
+Ref: support_ticket_participants.user_id > users.id [delete: restrict, update: cascade]
+Ref: support_ticket_participants.last_read_message_id >? support_ticket_messages.id [delete: restrict, update: cascade]
+Ref: support_ticket_message_media.message_id > support_ticket_messages.id [delete: restrict, update: cascade]
+Ref: support_ticket_message_media.media_file_id > media_files.id [delete: restrict, update: cascade]
+Ref: media_files.id ?- users.profile_media_file_id [delete: restrict, update: cascade]
+Ref: deposit_quotes.id - deposit_payments.quote_id [delete: restrict, update: cascade]
+Ref: media_files.id ?- identity_liveness_checks.video_media_file_id [delete: restrict, update: cascade]
+Ref: submissions.id - submission_reviews.submission_id [delete: restrict, update: cascade]
+Ref: submission_reviews.id ?- ledger_transactions.submission_review_id [delete: restrict, update: cascade]
+Ref: ledger_transactions.id ?- ledger_transactions.reversal_of_id [delete: restrict, update: cascade]
+Ref: ledger_transactions.id ?- deposit_payments.credit_transaction_id [delete: restrict, update: cascade]
+Ref: withdrawal_quotes.id - withdrawals.quote_id [delete: restrict, update: cascade]
+Ref: ledger_transactions.id - withdrawals.lock_transaction_id [delete: restrict, update: cascade]
+Ref: ledger_transactions.id ?- withdrawals.settlement_transaction_id [delete: restrict, update: cascade]
+Ref: ledger_transactions.id ?- withdrawals.release_transaction_id [delete: restrict, update: cascade]
+Ref: ledger_transactions.id ?- advertisements.purchase_transaction_id [delete: restrict, update: cascade]
+Ref: ledger_transactions.id - job_reward_increases.funding_transaction_id [delete: restrict, update: cascade]
+Ref: ledger_transactions.id - job_promotions.purchase_transaction_id [delete: restrict, update: cascade]
+Ref: ledger_transactions.id - user_subscriptions.purchase_transaction_id [delete: restrict, update: cascade]
+Ref: ledger_transactions.id ?- referral_rewards.ledger_transaction_id [delete: restrict, update: cascade]
+Ref: ledger_transactions.id - prize_ticket_orders.purchase_transaction_id [delete: restrict, update: cascade]
+Ref: ledger_transactions.id - prize_draw_winners.payout_transaction_id [delete: restrict, update: cascade]

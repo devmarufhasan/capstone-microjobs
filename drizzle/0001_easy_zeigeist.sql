@@ -1,0 +1,2 @@
+ALTER TABLE "student_verifications" ADD COLUMN "consent_version" text DEFAULT 'student-id-v1' NOT NULL;--> statement-breakpoint
+ALTER TABLE "student_verifications" ADD COLUMN "consented_at" timestamp with time zone DEFAULT now() NOT NULL;
