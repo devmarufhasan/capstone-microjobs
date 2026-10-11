@@ -1,3 +1,4 @@
+import { redirectAdminFromMarketplace } from "@/lib/http";
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -34,7 +35,8 @@ const categoryIcons = {
   data: Table2,
 };
 
-export default function Home() {
+export default async function Home() {
+  await redirectAdminFromMarketplace();
   return (
     <>
       <PublicHeader marketplace />

@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { CaseForm } from "@/components/case-form";
 import { getDb } from "@/lib/db";
 import { moderationCase, user } from "@/lib/db/schema";
-import { pageUser } from "@/lib/http";
+import { pageMember } from "@/lib/http";
 import { FileCheck2, Flag } from "lucide-react";
 
 export const metadata = { title: "My reports and disputes" };
@@ -12,7 +12,7 @@ export default async function Page({
 }: {
   searchParams: Promise<{ subject?: string }>;
 }) {
-  const actor = await pageUser();
+  const actor = await pageMember();
   const subjectId = (await searchParams).subject?.slice(0, 100);
   const [subject] =
     subjectId && subjectId !== actor.id

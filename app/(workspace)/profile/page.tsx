@@ -1,11 +1,11 @@
 import { SessionManager } from "@/components/session-manager";
 import { ProfileForm } from "@/components/profile-form";
-import { pageUser } from "@/lib/http";
+import { pageMember } from "@/lib/http";
 import Link from "next/link";
 import { ArrowUpRight, Eye, Layers3 } from "lucide-react";
 export const metadata = { title: "My profile" };
 export default async function Page() {
-  const actor = await pageUser();
+  const actor = await pageMember();
   return (
     <>
       <div className="page-heading">

@@ -1,13 +1,13 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { moderationCase, user } from "@/lib/db/schema";
-import { json, parseBody, requireUser, route, sameOrigin } from "@/lib/http";
+import { json, parseBody, requireMember, route, sameOrigin } from "@/lib/http";
 import { submitCase } from "@/lib/services";
 import { caseInput } from "@/lib/validation";
 
 export async function GET(request: Request) {
   return route(async () => {
-    const actor = await requireUser(request);
+    const actor = await requireMember(request);
     const cases = await getDb()
       .select({
         id: moderationCase.id,
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return route(async () => {
     sameOrigin(request);
-    const actor = await requireUser(request);
+    const actor = await requireMember(request);
     const input = await parseBody(request, caseInput);
     const created = await submitCase(getDb(), actor, input);
     return json({ id: created.id, status: created.status }, 201);

@@ -1,12 +1,12 @@
 import { asc, eq } from "drizzle-orm";
 import { PortfolioManager } from "@/components/portfolio-manager";
-import { pageUser } from "@/lib/http";
+import { pageMember } from "@/lib/http";
 import { getDb } from "@/lib/db";
 import { media, portfolio } from "@/lib/db/schema";
 import { storageConfigured } from "@/lib/storage";
 export const metadata = { title: "My portfolio" };
 export default async function Page() {
-  const actor = await pageUser();
+  const actor = await pageMember();
   const items = await getDb()
     .select({ item: portfolio, mediaMimeType: media.mimeType })
     .from(portfolio)

@@ -1,4 +1,6 @@
 import { connection } from "next/server";
+import { redirect } from "next/navigation";
+import { currentUser } from "@/lib/http";
 import { AuthForm } from "@/components/auth-form";
 import {
   authConfigured,
@@ -15,6 +17,9 @@ export default async function Page({
   searchParams: Promise<{ next?: string }>;
 }) {
   await connection();
+  const actor = await currentUser();
+  if (actor)
+    redirect(actor.accessLevel === "administrator" ? "/admin" : "/dashboard");
   const { next } = await searchParams;
   return (
     <AuthForm

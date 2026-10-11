@@ -3,12 +3,12 @@ import { ShieldCheck, MailCheck } from "lucide-react";
 import { VerificationForm } from "@/components/verification-form";
 import { getDb } from "@/lib/db";
 import { studentVerification } from "@/lib/db/schema";
-import { pageUser } from "@/lib/http";
+import { pageMember } from "@/lib/http";
 import { storageConfigured } from "@/lib/storage";
 import { emailVerificationEnabled } from "@/lib/feature-flags";
 export const metadata = { title: "Verification" };
 export default async function Page() {
-  const actor = await pageUser();
+  const actor = await pageMember();
   const [latest] = await getDb()
     .select()
     .from(studentVerification)
