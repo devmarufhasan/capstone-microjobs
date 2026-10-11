@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "env -u BETTER_AUTH_URL -u EMAIL_FROM -u EMAIL_VERIFICATION_ENABLED next dev --port 8081",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --port 8081",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",

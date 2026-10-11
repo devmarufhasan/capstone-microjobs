@@ -96,6 +96,12 @@ Auth evaluation (official docs checked 2026-10-10): Auth.js supports a Drizzle a
 
 ## Decision / progress log
 
+2026-10-11 auth-origin diagnosis: after user restarted the server, its launcher inherited `BETTER_AUTH_URL=http://localhost:3000` while `.env.local` correctly specified the tunnel HTTPS domain. Better Auth rejected the public resend request with Invalid origin. Local macOS/Linux dev command now unsets inherited BETTER_AUTH_URL, EMAIL_FROM and EMAIL_VERIFICATION_ENABLED before Next loads the env files. User must restart their terminal-owned server. User reports Resend domain verified; sender now reads noreply@api.amwooglobal.com, but actual delivery is still unverified.
+
+2026-10-11: User requested port 8081 as the permanent default. Both `npm run dev` and `npm start` now pass `--port 8081` in package.json, matching the existing tunnel target.
+
+2026-10-11 tunnel demo: user confirmed port 8081 is free and requested using their existing `api.amwooglobal.com` tunnel. Restarted MicroJobs with `npm run dev -- --port 8081`, set `.env.local` BETTER_AUTH_URL to `https://api.amwooglobal.com`, and allowed that hostname for Next development assets. Public `/login` returned HTTP 200 with the MicroJobs login page. Use the HTTPS domain for login/forms; Resend sender-domain verification is still separate and has not been completed by this change.
+
 2026-10-11 confirmed admin scope: administrator accounts are for administration only. Sidebar/menu expose overview, users, student-ID review, reports and disputes; no Student/Employer label or member options. Member workspace pages redirect admins to `/admin`; marketplace preview layouts and homepage do likewise. Member profile/mode, portfolio, ID submission, case submission/history and upload APIs reject admins with 403. Better Auth mode updates also recheck current account privileges. Admin moderation, evidence reads and account/session security remain available. Verification: 35 tests passed, including direct member-API denial and native-auth mode-switch rejection; TypeScript and ESLint passed. Browser visual validation remains unavailable.
 
 2026-10-11 auth navigation: login and registration pages now check the current active session server-side before rendering. Authenticated administrators redirect to `/admin`; ordinary users redirect to `/dashboard`. Guests retain access to both forms. TypeScript validation passed.
