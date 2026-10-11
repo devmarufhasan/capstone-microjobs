@@ -1,14 +1,14 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { audit, portfolio } from "@/lib/db/schema";
-import { json, parseBody, requireUser, route, sameOrigin } from "@/lib/http";
+import { json, parseBody, requireMember, route, sameOrigin } from "@/lib/http";
 import { checkMedia, ownedPortfolio } from "@/lib/services";
 import { portfolioInput } from "@/lib/validation";
 type Context = { params: Promise<{ id: string }> };
 export async function PATCH(request: Request, context: Context) {
   return route(async () => {
     sameOrigin(request);
-    const actor = await requireUser(request);
+    const actor = await requireMember(request);
     const { id } = await context.params;
     const original = await ownedPortfolio(getDb(), actor, id);
     const values = await parseBody(request, portfolioInput);
@@ -36,7 +36,7 @@ export async function PATCH(request: Request, context: Context) {
 export async function DELETE(request: Request, context: Context) {
   return route(async () => {
     sameOrigin(request);
-    const actor = await requireUser(request);
+    const actor = await requireMember(request);
     const { id } = await context.params;
     const item = await ownedPortfolio(getDb(), actor, id);
     await getDb().transaction(async (tx) => {

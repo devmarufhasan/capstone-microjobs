@@ -1,4 +1,6 @@
 import { connection } from "next/server";
+import { redirect } from "next/navigation";
+import { currentUser } from "@/lib/http";
 import { AuthForm } from "@/components/auth-form";
 import {
   authConfigured,
@@ -11,6 +13,9 @@ export const metadata = {
 };
 export default async function Page() {
   await connection();
+  const actor = await currentUser();
+  if (actor)
+    redirect(actor.accessLevel === "administrator" ? "/admin" : "/dashboard");
   return (
     <AuthForm
       mode="register"

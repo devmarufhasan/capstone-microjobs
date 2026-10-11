@@ -4,14 +4,14 @@ import { PDFDocument, PDFName } from "pdf-lib";
 import { and, count, eq, gte } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { media } from "@/lib/db/schema";
-import { HttpError, json, requireUser, route, sameOrigin } from "@/lib/http";
+import { HttpError, json, requireMember, route, sameOrigin } from "@/lib/http";
 import { detectImage, MAX_UPLOAD_BYTES } from "@/lib/policy";
 import { emailVerificationEnabled } from "@/lib/feature-flags";
 import { storageConfigured, storeFile, removeFile } from "@/lib/storage";
 export async function POST(request: Request) {
   return route(async () => {
     sameOrigin(request);
-    const actor = await requireUser(request);
+    const actor = await requireMember(request);
     if (!storageConfigured())
       throw new HttpError(503, "File uploads are not available yet.");
     if (emailVerificationEnabled() && !actor.emailVerified)
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
     const id = crypto.randomUUID(),
       storedMime = isPdf ? "application/pdf" : "image/jpeg",
       key = `${purpose}/${actor.id}/${id}.${isPdf ? "pdf" : "jpg"}`;
-    await storeFile(key, bytes, storedMime);
+    const storageKey = await storeFile(key, bytes, storedMime);
     try {
       await getDb()
         .insert(media)
@@ -120,13 +120,13 @@ export async function POST(request: Request) {
           id,
           ownerId: actor.id,
           purpose: purpose as "portfolio" | "university_id",
-          storageKey: key,
+          storageKey,
           mimeType: storedMime,
           sizeBytes: bytes.length,
           checksum: createHash("sha256").update(bytes).digest("hex"),
         });
     } catch (error) {
-      await removeFile(key).catch(() =>
+      await removeFile(storageKey).catch(() =>
         console.error("orphan_upload_cleanup_failed"),
       );
       throw error;

@@ -44,6 +44,25 @@ export async function pageUser(admin = false) {
   if (admin && !isAdmin(actor)) redirect("/unauthorized");
   return actor;
 }
+export async function requireMember(request?: Request) {
+  const actor = await requireUser(request);
+  if (isAdmin(actor))
+    throw new HttpError(
+      403,
+      "Administrator accounts cannot use student or employer features.",
+    );
+  return actor;
+}
+export async function pageMember() {
+  const actor = await pageUser();
+  if (isAdmin(actor)) redirect("/admin");
+  return actor;
+}
+export async function redirectAdminFromMarketplace() {
+  await connection();
+  const actor = await currentUser();
+  if (actor && isAdmin(actor)) redirect("/admin");
+}
 export function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (

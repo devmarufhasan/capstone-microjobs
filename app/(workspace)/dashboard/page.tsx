@@ -9,7 +9,7 @@ import {
   Search,
   Compass,
 } from "lucide-react";
-import { pageUser } from "@/lib/http";
+import { pageMember } from "@/lib/http";
 import { getDb } from "@/lib/db";
 import { portfolio, studentVerification } from "@/lib/db/schema";
 import { emailVerificationEnabled } from "@/lib/feature-flags";
@@ -17,7 +17,7 @@ import { OpportunityCard, ServiceCard } from "@/components/marketplace-cards";
 import { demoOpportunities, demoServices } from "@/lib/demo-marketplace";
 export const metadata = { title: "Overview" };
 export default async function Page() {
-  const actor = await pageUser();
+  const actor = await pageMember();
   const [[items], [approved]] = await Promise.all([
     getDb()
       .select({ total: count() })

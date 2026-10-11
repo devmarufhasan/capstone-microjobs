@@ -5,7 +5,7 @@ import {
   HttpError,
   json,
   parseBody,
-  requireUser,
+  requireMember,
   route,
   sameOrigin,
 } from "@/lib/http";
@@ -13,7 +13,7 @@ import { checkMedia } from "@/lib/services";
 import { portfolioInput } from "@/lib/validation";
 export async function GET(request: Request) {
   return route(async () => {
-    const actor = await requireUser(request);
+    const actor = await requireMember(request);
     return json(
       await getDb()
         .select()
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return route(async () => {
     sameOrigin(request);
-    const actor = await requireUser(request);
+    const actor = await requireMember(request);
     const values = await parseBody(request, portfolioInput);
     if (values.mediaId)
       await checkMedia(getDb(), values.mediaId, actor.id, "portfolio");

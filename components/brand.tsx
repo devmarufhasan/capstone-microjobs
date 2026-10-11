@@ -67,7 +67,9 @@ export function Brand() {
       <span className="brand-mark" aria-hidden="true">
         m
       </span>
-      microjobs<span style={{ color: "#409d77" }}>.</span>
+      <span className="brand-wordmark">
+        microjobs<span style={{ color: "#409d77" }}>.</span>
+      </span>
     </Link>
   );
 }

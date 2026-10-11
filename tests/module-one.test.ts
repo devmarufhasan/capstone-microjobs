@@ -202,6 +202,31 @@ describe("Module 1 against real PostgreSQL (PGlite)", () => {
       .where(eq(schema.user.email, "admin@example.com"))
       .returning();
   });
+  it("blocks admin mode changes through Better Auth while allowing member mode changes", async () => {
+    for (const [email, expected] of [
+      ["admin@example.com", 403],
+      ["bob@example.com", 200],
+    ] as const) {
+      const loginResponse = await login(email);
+      expect(loginResponse.status).toBe(200);
+      const cookie = loginResponse.headers
+        .getSetCookie()
+        .map((value) => value.split(";")[0])
+        .join("; ");
+      const response = await auth.handler(
+        new Request("http://localhost:3000/api/auth/update-user", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Origin: "http://localhost:3000",
+            Cookie: cookie,
+          },
+          body: JSON.stringify({ preferredMode: "employer" }),
+        }),
+      );
+      expect(response.status).toBe(expected);
+    }
+  });
   it("rejects private portfolio reads and edits by another member", async () => {
     await db.insert(schema.portfolio).values({
       id: "project-alice",

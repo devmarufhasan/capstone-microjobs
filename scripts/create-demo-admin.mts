@@ -47,14 +47,14 @@ try {
   await db.transaction(async (tx) => {
     const [member] = await tx.select().from(schema.user).where(eq(schema.user.email, email)).for("update");
     if (!member || member.status !== "active") throw new Error("Demo account was not created as an active user.");
-    await tx.update(schema.user).set({ accessLevel: "administrator", updatedAt: new Date() }).where(eq(schema.user.id, member.id));
+    await tx.update(schema.user).set({ accessLevel: "administrator", emailVerified: true, updatedAt: new Date() }).where(eq(schema.user.id, member.id));
     await tx.delete(schema.session).where(eq(schema.session.userId, member.id));
     await tx.insert(schema.audit).values({
       id: crypto.randomUUID(),
       actorId: member.id,
       action: "ADMIN_BOOTSTRAPPED",
       targetId: member.id,
-      reason: "Explicitly requested local demo administrator; sessions revoked",
+      reason: "Explicitly requested local demo administrator; test email marked verified by operator; sessions revoked",
     });
   });
 

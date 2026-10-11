@@ -8,12 +8,14 @@ import sharp from "sharp";
 import { PDFDocument } from "pdf-lib";
 vi.mock("@/lib/storage", () => ({
   storageConfigured: () => true,
-  storeFile: vi.fn(async () => {}),
+  storeFile: vi.fn(async (key: string) => key),
+  localFileResponse: vi.fn(async (): Promise<Response | null> => null),
   removeFile: vi.fn(async () => {}),
   fileUrl: vi.fn(async () => "https://storage.example/temporary-test-link"),
 }));
 import { POST as mediaPost } from "../app/api/media/route";
 import { GET as mediaGet } from "../app/api/media/[id]/route";
+import { localFileResponse } from "../lib/storage";
 import { GET as ownCasesGet, POST as casePost } from "../app/api/cases/route";
 import { GET as adminCasesGet } from "../app/api/admin/cases/route";
 import { PATCH as caseReviewPatch } from "../app/api/admin/cases/[id]/route";
@@ -35,13 +37,20 @@ import {
   GET as profileGet,
   PATCH as profilePatch,
 } from "../app/api/users/me/route";
-import { POST as portfolioPost } from "../app/api/portfolio/route";
+import {
+  GET as portfolioGet,
+  POST as portfolioPost,
+} from "../app/api/portfolio/route";
+import { POST as portfolioReorder } from "../app/api/portfolio/reorder/route";
 import {
   PATCH as portfolioPatch,
   DELETE as portfolioDelete,
 } from "../app/api/portfolio/[id]/route";
 import { PATCH as adminPatch } from "../app/api/admin/users/[id]/route";
-import { POST as verificationPost } from "../app/api/verification/student-id/route";
+import {
+  GET as verificationGet,
+  POST as verificationPost,
+} from "../app/api/verification/student-id/route";
 import { DELETE as revokeSession } from "../app/api/sessions/[id]/route";
 const postgres = new PGlite();
 const db = drizzle(postgres, { schema });
@@ -433,6 +442,47 @@ describe("Private media access and upload processing", () => {
       .where(eq(schema.audit.targetId, file.id));
     expect(events).toHaveLength(1);
   });
+  it("checks identity evidence permissions before reading local files", async () => {
+    await db.insert(schema.media).values({
+      id: "local-evidence",
+      ownerId: "alice",
+      purpose: "university_id",
+      storageKey: "local:university_id/alice/evidence.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 3,
+      checksum: "local-test",
+    });
+    const read = vi.mocked(localFileResponse);
+    read.mockClear();
+    for (const actor of [null, "bob"]) {
+      state.userId = actor;
+      expect(
+        (
+          await mediaGet(
+            request("/api/media/local-evidence"),
+            context("local-evidence"),
+          )
+        ).status,
+      ).toBe(404);
+    }
+    expect(read).not.toHaveBeenCalled();
+    for (const actor of ["alice", "carol"]) {
+      state.userId = actor;
+      read.mockResolvedValueOnce(
+        new Response("jpg", {
+          headers: { "Cache-Control": "private, no-store" },
+        }),
+      );
+      const response = await mediaGet(
+        request("/api/media/local-evidence"),
+        context("local-evidence"),
+      );
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe("jpg");
+      expect(response.headers.get("Location")).toBeNull();
+    }
+    expect(read).toHaveBeenCalledTimes(2);
+  });
   it("serves public portfolio media but stops issuing public links after hiding the item", async () => {
     await db.insert(schema.media).values({
       id: "public-work",
@@ -473,4 +523,43 @@ describe("Private media access and upload processing", () => {
       ).status,
     ).toBe(404);
   });
+});
+
+it("rejects administrator access to member APIs while retaining moderation access", async () => {
+  state.userId = "carol";
+  const responses = [
+    await profileGet(request("/api/users/me")),
+    await profilePatch(
+      request("/api/users/me", "PATCH", {
+        name: "Admin",
+        bio: "",
+        preferredMode: "employer",
+      }),
+    ),
+    await portfolioGet(request("/api/portfolio")),
+    await portfolioPost(request("/api/portfolio", "POST", {})),
+    await portfolioPatch(
+      request("/api/portfolio/missing", "PATCH", {}),
+      context("missing"),
+    ),
+    await portfolioDelete(
+      request("/api/portfolio/missing", "DELETE"),
+      context("missing"),
+    ),
+    await portfolioReorder(
+      request("/api/portfolio/reorder", "POST", { ids: [] }),
+    ),
+    await verificationGet(request("/api/verification/student-id")),
+    await verificationPost(request("/api/verification/student-id", "POST", {})),
+    await ownCasesGet(request("/api/cases")),
+    await casePost(request("/api/cases", "POST", {})),
+    await mediaPost(request("/api/media", "POST", {})),
+  ];
+  for (const response of responses) expect(response.status).toBe(403);
+  expect((await adminCasesGet(request("/api/admin/cases"))).status).toBe(200);
+  const [admin] = await db
+    .select()
+    .from(schema.user)
+    .where(eq(schema.user.id, "carol"));
+  expect(admin.preferredMode).toBe("student");
 });

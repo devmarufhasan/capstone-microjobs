@@ -50,47 +50,72 @@ export function AccountToolbox({ account }: { account: Account }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const items = [
-    {
-      id: "dashboard",
-      label: "Dashboard",
-      href: "/dashboard",
-      icon: LayoutDashboard,
-    },
-    {
-      id: "explore",
-      label: "Explore services",
-      href: "/explore",
-      icon: Search,
-    },
-    {
-      id: "opportunities",
-      label: "Find work · preview",
-      href: "/opportunities",
-      icon: Compass,
-    },
-    { id: "services", label: "My services · preview", href: "/seller/services", icon: Layers3 },
-    { id: "post-project", label: "Post a project · preview", href: "/projects/new", icon: FilePlus2 },
-    { id: "orders", label: "Orders · preview", href: "/orders", icon: PackageCheck },
-    { id: "messages", label: "Messages · preview", href: "/messages", icon: MessagesSquare },
-    { id: "profile", label: "My profile", href: "/profile", icon: UserRound },
-    {
-      id: "portfolio",
-      label: "My portfolio",
-      href: "/portfolio",
-      icon: BriefcaseBusiness,
-    },
-    {
-      id: "verification",
-      label: "Verification",
-      href: "/verification",
-      icon: ShieldCheck,
-    },
-    { id: "cases", label: "My cases", href: "/cases", icon: Flag },
-    ...(account.accessLevel === "administrator"
+  const items =
+    account.accessLevel === "administrator"
       ? [{ id: "admin", label: "Admin panel", href: "/admin", icon: Settings2 }]
-      : []),
-  ];
+      : [
+          {
+            id: "dashboard",
+            label: "Dashboard",
+            href: "/dashboard",
+            icon: LayoutDashboard,
+          },
+          {
+            id: "explore",
+            label: "Explore services",
+            href: "/explore",
+            icon: Search,
+          },
+          {
+            id: "opportunities",
+            label: "Find work · preview",
+            href: "/opportunities",
+            icon: Compass,
+          },
+          {
+            id: "services",
+            label: "My services · preview",
+            href: "/seller/services",
+            icon: Layers3,
+          },
+          {
+            id: "post-project",
+            label: "Post a project · preview",
+            href: "/projects/new",
+            icon: FilePlus2,
+          },
+          {
+            id: "orders",
+            label: "Orders · preview",
+            href: "/orders",
+            icon: PackageCheck,
+          },
+          {
+            id: "messages",
+            label: "Messages · preview",
+            href: "/messages",
+            icon: MessagesSquare,
+          },
+          {
+            id: "profile",
+            label: "My profile",
+            href: "/profile",
+            icon: UserRound,
+          },
+          {
+            id: "portfolio",
+            label: "My portfolio",
+            href: "/portfolio",
+            icon: BriefcaseBusiness,
+          },
+          {
+            id: "verification",
+            label: "Verification",
+            href: "/verification",
+            icon: ShieldCheck,
+          },
+          { id: "cases", label: "My cases", href: "/cases", icon: Flag },
+        ];
 
   async function signOut() {
     setPending(true);

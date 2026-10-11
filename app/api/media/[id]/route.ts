@@ -3,7 +3,7 @@ import { getDb } from "@/lib/db";
 import { audit, media, portfolio, user } from "@/lib/db/schema";
 import { currentUser, HttpError, route } from "@/lib/http";
 import { isAdmin } from "@/lib/policy";
-import { fileUrl } from "@/lib/storage";
+import { fileUrl, localFileResponse } from "@/lib/storage";
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -40,6 +40,8 @@ export async function GET(
         targetId: file.id,
         reason: "Authorized private evidence access",
       });
+    const local = await localFileResponse(file.storageKey, file.mimeType);
+    if (local) return local;
     return new Response(null, {
       status: 307,
       headers: {

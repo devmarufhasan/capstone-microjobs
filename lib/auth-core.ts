@@ -91,7 +91,31 @@ export function createAuth(
           },
         },
         update: {
-          before: async (value) => {
+          before: async (value, context) => {
+            if (value.preferredMode !== undefined) {
+              const id = context?.context.session?.user.id;
+              if (!id || !context)
+                throw new APIError("FORBIDDEN", {
+                  message: "An active member account is required.",
+                });
+              const adapter = await getCurrentAdapter(context.context.adapter);
+              const actor = await adapter.findOne<{
+                accessLevel: string;
+                status: string;
+              }>({
+                model: "user",
+                where: [{ field: "id", value: id }],
+              });
+              if (
+                !actor ||
+                actor.status !== "active" ||
+                actor.accessLevel === "administrator"
+              )
+                throw new APIError("FORBIDDEN", {
+                  message:
+                    "Administrator accounts cannot switch workspace modes.",
+                });
+            }
             if (value.image)
               throw new APIError("BAD_REQUEST", {
                 message: "Profile image updates are not supported yet.",
