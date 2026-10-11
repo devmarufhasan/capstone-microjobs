@@ -1,6 +1,6 @@
 # MicroJobs persistent project context
 
-Last updated: 2026-10-10 (Asia/Dhaka).
+Last updated: 2026-10-11 (Asia/Dhaka).
 
 ## Start here
 
@@ -88,7 +88,7 @@ Pages within 3 seconds under normal network conditions; APIs within 1–2 second
 
 Initial snapshot before implementation, 2026-10-10: minimal Next.js 16.4.0 App Router starter, React 19.3.0, TypeScript 5, Tailwind CSS 4.3.3. This paragraph records the starting state, not the current implementation.
 
-Current status: Module 1 application, APIs, ten-table PostgreSQL schema, three migrations, local tests and setup instructions implemented. The user applied the migrations; a read-only Neon check on 2026-10-10 found all ten Module 1 tables. `BETTER_AUTH_SECRET` is configured. Module 1 is **awaiting Resend configuration and live end-to-end validation**. The user will personally run `db:generate`/`db:migrate` whenever needed; request those commands explicitly and do not run them. Private S3 setup is deferred by the user. Modules 2 and 3 remain outside current scope. Module 1 now includes user/account report and dispute submission, owner history, protected admin review UI/API, and audited decisions; job-linked moderation depends on the later marketplace job model. No fake statistics or marketplace data is shown.
+Current status: Module 1 application, APIs, ten-table PostgreSQL schema, three migrations, local tests and setup instructions implemented. The user applied the migrations; a read-only Neon check on 2026-10-10 found all ten Module 1 tables. Local `.env` has email verification enabled and Resend settings configured; live email delivery still needs validation. The user will personally run `db:generate`/`db:migrate` whenever needed; request those commands explicitly and do not run them. Private S3 setup is deferred by the user. Modules 2 and 3 remain outside current scope. Module 1 now includes user/account report and dispute submission, owner history, protected admin review UI/API, and audited decisions; job-linked moderation depends on the later marketplace job model. No fake statistics or marketplace data is shown.
 
 Module 1 guide details: email/password registration and login, password recovery, own profile, server-side access checks, contact verification, separately reviewed university-ID verification, owner-managed portfolios with visibility and uploads, and audited administration. Confirmed user choices resolved role/mode, badge, phone OTP, email and storage choices. Implementation defaults: phone omitted; portfolio private by default; JPEG/PNG only up to 5 MB; administrators may suspend/restore ordinary users but cannot change access levels through the UI. ID evidence and unattached media are retained with no automatic deletion. These implementation defaults are documented in the README; they are not original report requirements. Google/social login is a possible later feature, not a Module 1 requirement.
 
@@ -99,6 +99,8 @@ Auth evaluation (official docs checked 2026-10-10): Auth.js supports a Drizzle a
 2026-10-10: At the user's explicit request, reset the existing demo administrator password and revoked its sessions in the configured Neon database. Added guarded `scripts/reset-demo-admin.mts` (requires `--confirm-reset`, localhost configuration and an existing active demo administrator), using Better Auth password hashing and transactional credential verification, session revocation and audit recording. Reset completed successfully; credentials were delivered only in the conversation, not stored in repository files.
 
 2026-10-10 maintenance: `scripts/create-admin.mts` now uses the CommonJS-compatible default import for `@next/env`, fixing the Node 24 ESM named-export startup error. Checked script startup without an email argument; no account promotion was performed.
+
+2026-10-11 maintenance: auth configuration checks now reject whitespace-only values; login and registration pages are marked noindex/nofollow. Admin overview counts are aggregated per table to reduce count-query round trips without changing schema or displayed totals. No schema migration was needed; no tests were run for this change.
 
 | Date       | Decision or work                                                                                                                                                                                      | Status                                               |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |

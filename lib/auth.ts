@@ -5,15 +5,22 @@ import { createAuth } from "./auth-core";
 import { emailVerificationEnabled } from "./feature-flags";
 export { emailVerificationEnabled } from "./feature-flags";
 
+function isConfigured(value: string | undefined) {
+  return !!value?.trim();
+}
+
 export function authConfigured() {
   return !!(
-    process.env.DATABASE_URL &&
-    process.env.BETTER_AUTH_SECRET &&
-    process.env.BETTER_AUTH_URL
+    isConfigured(process.env.DATABASE_URL) &&
+    isConfigured(process.env.BETTER_AUTH_SECRET) &&
+    isConfigured(process.env.BETTER_AUTH_URL)
   );
 }
 export function emailConfigured() {
-  return !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+  return (
+    isConfigured(process.env.RESEND_API_KEY) &&
+    isConfigured(process.env.EMAIL_FROM)
+  );
 }
 let instance: ReturnType<typeof createAuth> | undefined;
 export function getAuth() {

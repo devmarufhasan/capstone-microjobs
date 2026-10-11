@@ -1,4 +1,14 @@
-import { and, count, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gte,
+  inArray,
+  lt,
+  sql,
+  type SQLWrapper,
+} from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import {
   audit,
@@ -19,20 +29,19 @@ import {
   MessagesSquare,
 } from "lucide-react";
 export const metadata = { title: "Administration" };
+const filteredCount = (condition: SQLWrapper) =>
+  sql<number>`count(*) filter (where ${condition})`.mapWith(Number);
+
 export default async function Page() {
   await pageUser(true);
   const now = new Date();
   const lastWeek = new Date(now.getTime() - 7 * 86_400_000);
   const priorWeek = new Date(now.getTime() - 14 * 86_400_000);
   const [
-    [users],
-    [students],
-    [employers],
-    [verified],
-    [pending],
-    [projects],
-    [reports],
-    [disputes],
+    [userStats],
+    [verificationStats],
+    [projectStats],
+    [caseStats],
     [newAccounts],
     [priorAccounts],
     [newProjects],
@@ -41,46 +50,42 @@ export default async function Page() {
     [priorCases],
     events,
   ] = await Promise.all([
-    getDb().select({ value: count() }).from(user),
     getDb()
-      .select({ value: count() })
-      .from(user)
-      .where(
-        and(eq(user.accessLevel, "user"), eq(user.preferredMode, "student")),
-      ),
-    getDb()
-      .select({ value: count() })
-      .from(user)
-      .where(
-        and(eq(user.accessLevel, "user"), eq(user.preferredMode, "employer")),
-      ),
-    getDb()
-      .select({ value: count() })
-      .from(studentVerification)
-      .where(eq(studentVerification.status, "approved")),
-    getDb()
-      .select({ value: count() })
-      .from(studentVerification)
-      .where(eq(studentVerification.status, "pending")),
-    getDb().select({ value: count() }).from(portfolio),
-    getDb()
-      .select({ value: count() })
-      .from(moderationCase)
-      .where(
-        and(
-          eq(moderationCase.type, "report"),
-          inArray(moderationCase.status, ["open", "under_review"]),
+      .select({
+        users: count(),
+        students: filteredCount(
+          and(eq(user.accessLevel, "user"), eq(user.preferredMode, "student")),
         ),
-      ),
-    getDb()
-      .select({ value: count() })
-      .from(moderationCase)
-      .where(
-        and(
-          eq(moderationCase.type, "dispute"),
-          inArray(moderationCase.status, ["open", "under_review"]),
+        employers: filteredCount(
+          and(eq(user.accessLevel, "user"), eq(user.preferredMode, "employer")),
         ),
-      ),
+      })
+      .from(user)
+    getDb()
+      .select({
+        verified: filteredCount(eq(studentVerification.status, "approved")),
+        pending: filteredCount(eq(studentVerification.status, "pending")),
+      })
+      .from(studentVerification)
+    getDb()
+      .select({ projects: count() })
+      .from(portfolio),
+    getDb()
+      .select({
+        reports: filteredCount(
+          and(
+            eq(moderationCase.type, "report"),
+            inArray(moderationCase.status, ["open", "under_review"]),
+          ),
+        ),
+        disputes: filteredCount(
+          and(
+            eq(moderationCase.type, "dispute"),
+            inArray(moderationCase.status, ["open", "under_review"]),
+          ),
+        ),
+      })
+      .from(moderationCase),
     getDb()
       .select({ value: count() })
       .from(user)
@@ -139,24 +144,40 @@ export default async function Page() {
       </div>
       <div className="admin-stat-grid">
         {[
-          { label: "Accounts", value: users.value, icon: UsersRound },
-          { label: "Student mode", value: students.value, icon: GraduationCap },
+          { label: "Accounts", value: userStats.users, icon: UsersRound },
+          {
+            label: "Student mode",
+            value: userStats.students,
+            icon: GraduationCap,
+          },
           {
             label: "Employer mode",
-            value: employers.value,
+            value: userStats.employers,
             icon: BriefcaseBusiness,
           },
           {
             label: "Verified students",
-            value: verified.value,
+            value: verificationStats.verified,
             icon: BadgeCheck,
           },
-          { label: "Pending ID reviews", value: pending.value, icon: Clock3 },
-          { label: "Portfolio projects", value: projects.value, icon: Layers3 },
-          { label: "Open reports", value: reports.value, icon: Flag },
+          {
+            label: "Pending ID reviews",
+            value: verificationStats.pending,
+            icon: Clock3,
+          },
+          {
+            label: "Portfolio projects",
+            value: projectStats.projects,
+            icon: Layers3,
+          },
+          {
+            label: "Open reports",
+            value: caseStats.reports,
+            icon: Flag,
+          },
           {
             label: "Open disputes",
-            value: disputes.value,
+            value: caseStats.disputes,
             icon: MessagesSquare,
           },
         ].map(({ label, value, icon: Icon }) => (

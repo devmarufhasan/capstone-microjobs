@@ -8,6 +8,7 @@ import {
 export const metadata = {
   title: "Log in",
   description: "Log in to your MicroJobs account to continue to your workspace.",
+  robots: { index: false, follow: false },
 };
 export default async function Page({
   searchParams,

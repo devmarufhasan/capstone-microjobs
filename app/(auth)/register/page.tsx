@@ -8,6 +8,7 @@ import {
 export const metadata = {
   title: "Create account",
   description: "Create your MicroJobs account to showcase your skills and connect with student opportunities.",
+  robots: { index: false, follow: false },
 };
 export default async function Page() {
   await connection();
