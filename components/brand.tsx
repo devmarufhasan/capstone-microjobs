@@ -107,7 +107,7 @@ export function PublicHeader({
             <nav className="market-header-links" aria-label="Marketplace">
               <Link href="/explore">Explore services</Link>
               <Link href="/opportunities">Find work</Link>
-              <Link href="/projects/new">Post a project</Link>
+              <Link href="/jobs/new">Post a job</Link>
             </nav>
           )}
           <Suspense
@@ -125,7 +125,7 @@ export function PublicHeader({
       {marketplace && (
         <nav className="market-category-bar" aria-label="Service categories">
           <div>
-            <Link href="/opportunities">Find work · preview</Link>
+            <Link href="/opportunities">Find work</Link>
             {categories.map((category) => (
               <Link key={category.id} href={`/explore?category=${category.id}`}>
                 {category.label}

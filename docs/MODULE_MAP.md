@@ -1,6 +1,6 @@
 # MicroJobs module and schema map
 
-Read [project context](PROJECT_CONTEXT.md) first. Module 1 has a local implementation; see [Module 1 status](MODULE_1_STATUS.md). Modules 2 and 3 remain reference/planned as of 2026-10-10. The original [DBML](references/database-design.dbml) is the detailed field/constraint reference. Groupings below organize existing references; they do not establish an approved implementation order.
+Read [project context](PROJECT_CONTEXT.md) first. Module 1 has a local implementation; see [Module 1 status](MODULE_1_STATUS.md). Module 2 has a local implementation of the report workflow (2026-11-14); see [Module 2 status](MODULE_2_STATUS.md). Module 3 remains reference/planned. The original [DBML](references/database-design.dbml) is the detailed field/constraint reference. Groupings below organize existing references; they do not establish an approved implementation order.
 
 ## Report requirements and original owners
 

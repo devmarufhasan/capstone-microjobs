@@ -75,3 +75,67 @@ export const reorderInput = z
       .refine((ids) => new Set(ids).size === ids.length, "Duplicate item"),
   })
   .strict();
+
+// Module 2 — job marketplace. Money inputs are whole taka; services convert to poisha.
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a valid date")
+  .refine(
+    (value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)),
+    "Use a valid date",
+  );
+export const jobCategories = [
+  "design",
+  "development",
+  "marketing",
+  "writing",
+  "video",
+  "data",
+] as const;
+export const jobInput = z
+  .object({
+    title: z.string().trim().min(5).max(120),
+    description: z.string().trim().min(20).max(5000),
+    category: z.enum(jobCategories),
+    skills: z
+      .array(z.string().trim().min(1).max(30))
+      .min(1, "Add at least one required skill")
+      .max(10)
+      .refine(
+        (skills) =>
+          new Set(skills.map((s) => s.toLowerCase())).size === skills.length,
+        "Duplicate skill",
+      ),
+    budgetTaka: z.number().int().min(100).max(500_000),
+    deadline: isoDate,
+    locationType: z.enum(["remote", "onsite", "hybrid"]),
+    location: z
+      .string()
+      .trim()
+      .max(160)
+      .transform((x) => x || null),
+  })
+  .strict()
+  .refine((value) => value.locationType === "remote" || !!value.location, {
+    message: "Add a location for on-site or hybrid work",
+    path: ["location"],
+  });
+export const applicationInput = z
+  .object({
+    message: z.string().trim().min(20).max(1500),
+    proposedPriceTaka: z.number().int().min(50).max(500_000),
+    deliveryDays: z.number().int().min(1).max(365),
+    approach: z.string().trim().max(3000).default(""),
+    suitability: z.string().trim().max(2000).default(""),
+  })
+  .strict();
+export const applicationDecisionInput = z
+  .object({ decision: z.enum(["shortlisted", "rejected"]) })
+  .strict();
+export const jobSearchInput = z.object({
+  q: z.string().trim().max(100).catch(""),
+  category: z.enum(jobCategories).optional().catch(undefined),
+  sort: z
+    .enum(["newest", "budget-high", "budget-low", "deadline"])
+    .catch("newest"),
+});

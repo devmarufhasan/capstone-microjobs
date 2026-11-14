@@ -3611,8 +3611,10 @@ tbody tr:last-child td {
   scrollbar-width: none;
   padding: 22px 0;
 }
-.market-filter-chips button {
+.market-filter-chips button,
+.market-filter-chips a {
   flex: none;
+  text-decoration: none;
   border: 1px solid #dfe8de;
   border-radius: 8px;
   padding: 9px 13px;
@@ -3621,10 +3623,12 @@ tbody tr:last-child td {
   font-size: 11px;
   font-weight: 750;
 }
-.market-filter-chips button:hover {
+.market-filter-chips button:hover,
+.market-filter-chips a:hover {
   border-color: #79ad86;
 }
-.market-filter-chips button.active {
+.market-filter-chips button.active,
+.market-filter-chips a.active {
   border-color: #176b55;
   background: #176b55;
   color: white;
@@ -4292,3 +4296,64 @@ tbody tr:last-child td {
 .market-message-compose button { display:grid; place-items:center; width:33px; height:33px; border:0; border-radius:6px; background:#e7eee7; color:#9cab9e; cursor:not-allowed; }
 @media (max-width:800px) { .market-composer-grid,.market-messages-preview { grid-template-columns:1fr; } .market-composer-preview { position:static; } .market-message-list { border-right:0; border-bottom:1px solid #e2ebe2; } .seller-empty-state { align-items:flex-start; flex-wrap:wrap; } }
 @media (max-width:560px) { .market-composer-form .grid-two { grid-template-columns:1fr; } .market-order-card { padding:20px; gap:12px; } .market-order-icon { width:39px; height:39px; } .seller-empty-state { padding:25px; } .market-message-bubbles { padding:20px; } }
+
+/* Module 2 — job marketplace */
+.badge.submitted,
+.badge.shortlisted,
+.badge.in_progress {
+  border-color: #f1dfb5;
+  background: #fff6e3;
+  color: #865d14;
+}
+.badge.hired,
+.badge.completed {
+  border-color: #c8e8d4;
+  background: #e6f5e9;
+  color: #146542;
+}
+.badge.withdrawn,
+.badge.cancelled {
+  border-color: #e3e3e3;
+  background: #f4f4f4;
+  color: #5e5e5e;
+}
+.job-list {
+  display: grid;
+  gap: 14px;
+}
+.job-list-item {
+  display: grid;
+  gap: 8px;
+}
+.job-list-item h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+.job-list-item h3 a:hover {
+  text-decoration: underline;
+}
+.job-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  color: #6c806f;
+  font-size: 12px;
+}
+.job-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.applicant-card {
+  display: grid;
+  gap: 10px;
+}
+.applicant-card blockquote {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 3px solid #dfe8de;
+  white-space: pre-wrap;
+}
+.pre-wrap {
+  white-space: pre-wrap;
+}

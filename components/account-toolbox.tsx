@@ -68,7 +68,7 @@ export function AccountToolbox({ account }: { account: Account }) {
           },
           {
             id: "opportunities",
-            label: "Find work · preview",
+            label: "Find work",
             href: "/opportunities",
             icon: Compass,
           },
@@ -80,8 +80,8 @@ export function AccountToolbox({ account }: { account: Account }) {
           },
           {
             id: "post-project",
-            label: "Post a project · preview",
-            href: "/projects/new",
+            label: "Post a job",
+            href: "/jobs/new",
             icon: FilePlus2,
           },
           {

@@ -9,6 +9,8 @@ import {
   Flag,
   Search,
   Compass,
+  FileText,
+  ClipboardList,
 } from "lucide-react";
 export function WorkspaceNav({ admin }: { admin: boolean }) {
   const path = usePathname();
@@ -25,7 +27,9 @@ export function WorkspaceNav({ admin }: { admin: boolean }) {
         : [
             ["/dashboard", "Overview", LayoutDashboard],
             ["/explore", "Explore services", Search],
-            ["/opportunities", "Find work · preview", Compass],
+            ["/opportunities", "Find work", Compass],
+            ["/applications", "My applications", FileText],
+            ["/jobs", "My jobs", ClipboardList],
             ["/profile", "My profile", UserRound],
             ["/verification", "Verification", ShieldCheck],
             ["/portfolio", "My portfolio", BriefcaseBusiness],

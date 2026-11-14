@@ -10,6 +10,8 @@ import {
   uniqueIndex,
   pgEnum,
   check,
+  date,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 const dates = () => ({
@@ -236,7 +238,108 @@ export const moderationCase = pgTable(
     index("cases_status_created_idx").on(t.status, t.createdAt),
     index("cases_subject_created_idx").on(t.subjectUserId, t.createdAt),
     check("cases_distinct_parties", sql`${t.reporterId} <> ${t.subjectUserId}`),
-    check("cases_nonempty_description", sql`length(trim(${t.description})) > 0`),
+    check(
+      "cases_nonempty_description",
+      sql`length(trim(${t.description})) > 0`,
+    ),
   ],
 );
 export type User = typeof user.$inferSelect;
+
+// Module 2: report-defined job marketplace (post → apply/propose → hire).
+// Money is stored as integer poisha (BDT × 100), never floating point.
+export const jobCategory = pgEnum("job_category", [
+  "design",
+  "development",
+  "marketing",
+  "writing",
+  "video",
+  "data",
+]);
+export const jobLocationType = pgEnum("job_location_type", [
+  "remote",
+  "onsite",
+  "hybrid",
+]);
+// completed is set by Module 3 (completion proof approval), not Module 2.
+export const jobStatus = pgEnum("job_status", [
+  "open",
+  "in_progress",
+  "completed",
+  "cancelled",
+]);
+export const applicationStatus = pgEnum("job_application_status", [
+  "submitted",
+  "shortlisted",
+  "hired",
+  "rejected",
+  "withdrawn",
+]);
+export const job = pgTable(
+  "jobs",
+  {
+    id: text("id").primaryKey(),
+    employerId: text("employer_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    category: jobCategory("category").notNull(),
+    skills: text("skills").array().default([]).notNull(),
+    budgetPoisha: integer("budget_poisha").notNull(),
+    deadline: date("deadline", { mode: "string" }).notNull(),
+    locationType: jobLocationType("location_type").default("remote").notNull(),
+    location: text("location"),
+    status: jobStatus("status").default("open").notNull(),
+    hiredApplicationId: text("hired_application_id").references(
+      (): AnyPgColumn => jobApplication.id,
+      { onDelete: "restrict" },
+    ),
+    hiredAt: timestamp("hired_at", { withTimezone: true }),
+    ...dates(),
+  },
+  (t) => [
+    index("jobs_status_created_idx").on(t.status, t.createdAt),
+    index("jobs_employer_created_idx").on(t.employerId, t.createdAt),
+    index("jobs_category_status_idx").on(t.category, t.status),
+    check("jobs_budget_positive", sql`${t.budgetPoisha} > 0`),
+    check("jobs_nonempty_title", sql`length(trim(${t.title})) > 0`),
+  ],
+);
+export const jobApplication = pgTable(
+  "job_applications",
+  {
+    id: text("id").primaryKey(),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => job.id, { onDelete: "restrict" }),
+    studentId: text("student_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    // "Apply for Jobs": short message, proposed price and delivery time.
+    message: text("message").notNull(),
+    proposedPricePoisha: integer("proposed_price_poisha").notNull(),
+    deliveryDays: integer("delivery_days").notNull(),
+    // "Job Proposal System": customized approach and suitability.
+    approach: text("approach").default("").notNull(),
+    suitability: text("suitability").default("").notNull(),
+    status: applicationStatus("status").default("submitted").notNull(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    ...dates(),
+  },
+  (t) => [
+    uniqueIndex("job_applications_job_student_idx").on(t.jobId, t.studentId),
+    index("job_applications_job_status_idx").on(t.jobId, t.status),
+    index("job_applications_student_created_idx").on(t.studentId, t.createdAt),
+    uniqueIndex("job_applications_one_hire_idx")
+      .on(t.jobId)
+      .where(sql`${t.status} = 'hired'`),
+    check("job_applications_price_positive", sql`${t.proposedPricePoisha} > 0`),
+    check(
+      "job_applications_delivery_range",
+      sql`${t.deliveryDays} between 1 and 365`,
+    ),
+  ],
+);
+export type Job = typeof job.$inferSelect;
+export type JobApplication = typeof jobApplication.$inferSelect;
