@@ -19,12 +19,11 @@ import {
   Table2,
 } from "lucide-react";
 import { Brand, HomeStartLink, PublicHeader } from "@/components/brand";
-import { OpportunityCard, ServiceCard } from "@/components/marketplace-cards";
-import {
-  categories,
-  demoOpportunities,
-  demoServices,
-} from "@/lib/demo-marketplace";
+import { JobCard, ServiceCard } from "@/components/marketplace-cards";
+import { categories, demoServices } from "@/lib/demo-marketplace";
+import { getDb } from "@/lib/db";
+import { searchOpenJobs } from "@/lib/marketplace";
+import { authConfigured } from "@/lib/auth";
 
 const categoryIcons = {
   design: PenLine,
@@ -34,6 +33,27 @@ const categoryIcons = {
   video: PlaySquare,
   data: Table2,
 };
+
+async function LatestJobs() {
+  const rows = authConfigured()
+    ? await searchOpenJobs(getDb(), { q: "", sort: "newest" }, 3)
+    : [];
+  if (!rows.length)
+    return (
+      <p className="muted">
+        No open jobs right now.{" "}
+        <Link href="/jobs/new">Post the first one →</Link>
+      </p>
+    );
+  return rows.map((row) => (
+    <JobCard
+      key={row.job.id}
+      job={row.job}
+      employerName={row.employerName}
+      applications={row.applications}
+    />
+  ));
+}
 
 export default async function Home() {
   await redirectAdminFromMarketplace();
@@ -212,8 +232,8 @@ export default async function Home() {
               <span className="market-overline">Find a way in</span>
               <h2 id="opportunities-title">Small projects. Real momentum.</h2>
               <p>
-                Sample opportunities show the future work-browsing experience.
-                Applications are not open yet.
+                The newest open jobs from people and small businesses near you.
+                Open one to send a proposal.
               </p>
             </div>
             <Link href="/opportunities" className="market-text-link">
@@ -221,9 +241,9 @@ export default async function Home() {
             </Link>
           </div>
           <div className="market-opportunity-grid">
-            {demoOpportunities.slice(0, 3).map((opportunity) => (
-              <OpportunityCard key={opportunity.id} opportunity={opportunity} />
-            ))}
+            <Suspense fallback={null}>
+              <LatestJobs />
+            </Suspense>
           </div>
         </section>
 
@@ -306,7 +326,7 @@ export default async function Home() {
           <strong>MicroJobs</strong>
           <Link href="/">Home</Link>
           <Link href="/explore">Browse services</Link>
-          <Link href="/projects/new">Post a project</Link>
+          <Link href="/jobs/new">Post a job</Link>
         </div>
         <span>© MicroJobs</span>
       </footer>

@@ -13,27 +13,57 @@ import { pageMember } from "@/lib/http";
 import { getDb } from "@/lib/db";
 import { portfolio, studentVerification } from "@/lib/db/schema";
 import { emailVerificationEnabled } from "@/lib/feature-flags";
-import { OpportunityCard, ServiceCard } from "@/components/marketplace-cards";
-import { demoOpportunities, demoServices } from "@/lib/demo-marketplace";
+import { JobCard, ServiceCard } from "@/components/marketplace-cards";
+import { demoServices } from "@/lib/demo-marketplace";
+import { searchOpenJobs } from "@/lib/marketplace";
+import { job, jobApplication } from "@/lib/db/schema";
+import { inArray } from "drizzle-orm";
 export const metadata = { title: "Overview" };
 export default async function Page() {
   const actor = await pageMember();
-  const [[items], [approved]] = await Promise.all([
-    getDb()
-      .select({ total: count() })
-      .from(portfolio)
-      .where(eq(portfolio.ownerId, actor.id)),
-    getDb()
-      .select({ id: studentVerification.id })
-      .from(studentVerification)
-      .where(
-        and(
-          eq(studentVerification.userId, actor.id),
-          eq(studentVerification.status, "approved"),
+  const [[items], [approved], [activeJobs], [activeApplications], latestJobs] =
+    await Promise.all([
+      getDb()
+        .select({ total: count() })
+        .from(portfolio)
+        .where(eq(portfolio.ownerId, actor.id)),
+      getDb()
+        .select({ id: studentVerification.id })
+        .from(studentVerification)
+        .where(
+          and(
+            eq(studentVerification.userId, actor.id),
+            eq(studentVerification.status, "approved"),
+          ),
+        )
+        .limit(1),
+      getDb()
+        .select({ total: count() })
+        .from(job)
+        .where(
+          and(
+            eq(job.employerId, actor.id),
+            inArray(job.status, ["open", "in_progress"]),
+          ),
         ),
-      )
-      .limit(1),
-  ]);
+      getDb()
+        .select({ total: count() })
+        .from(jobApplication)
+        .where(
+          and(
+            eq(jobApplication.studentId, actor.id),
+            inArray(jobApplication.status, [
+              "submitted",
+              "shortlisted",
+              "hired",
+            ]),
+          ),
+        ),
+      searchOpenJobs(getDb(), { q: "", sort: "newest" }, 4),
+    ]);
+  const suggestedJobs = latestJobs
+    .filter((row) => row.job.employerId !== actor.id)
+    .slice(0, 2);
   return (
     <>
       <div className="page-heading">
@@ -57,7 +87,7 @@ export default async function Page() {
           </h2>
           <p>
             {actor.preferredMode === "student"
-              ? "Explore a preview of short projects built around student skills."
+              ? "Browse open jobs and send your proposal."
               : "Browse sample services and see the talent behind the work."}
           </p>
         </div>
@@ -78,8 +108,14 @@ export default async function Page() {
             <Compass size={17} aria-hidden="true" /> Browse opportunities{" "}
             <ArrowRight size={16} aria-hidden="true" />
           </Link>
-          <Link href={actor.preferredMode === "student" ? "/seller/services" : "/projects/new"}>
-            {actor.preferredMode === "student" ? "My service storefront" : "Draft a project brief"}
+          <Link
+            href={
+              actor.preferredMode === "student" ? "/applications" : "/jobs/new"
+            }
+          >
+            {actor.preferredMode === "student"
+              ? `My applications (${activeApplications.total})`
+              : `Post a job · ${activeJobs.total} active`}
             <ArrowRight size={16} aria-hidden="true" />
           </Link>
         </div>
@@ -185,15 +221,16 @@ export default async function Page() {
       <section className="dashboard-preview-section">
         <div className="market-section-heading">
           <div>
-            <span className="market-overline">Marketplace preview</span>
+            <span className="market-overline">Marketplace</span>
             <h2>
               {actor.preferredMode === "student"
-                ? "Opportunities to explore"
+                ? "Open jobs to explore"
                 : "Student services to explore"}
             </h2>
             <p>
-              These are sample listings; applications and bookings are not
-              available yet.
+              {actor.preferredMode === "student"
+                ? "The newest open jobs on MicroJobs."
+                : "Service listings are sample previews; bookings are not available yet."}
             </p>
           </div>
           <Link
@@ -207,9 +244,18 @@ export default async function Page() {
         </div>
         {actor.preferredMode === "student" ? (
           <div className="market-opportunity-grid">
-            {demoOpportunities.slice(0, 2).map((job) => (
-              <OpportunityCard key={job.id} opportunity={job} />
-            ))}
+            {suggestedJobs.length ? (
+              suggestedJobs.map((row) => (
+                <JobCard
+                  key={row.job.id}
+                  job={row.job}
+                  employerName={row.employerName}
+                  applications={row.applications}
+                />
+              ))
+            ) : (
+              <p className="muted">No open jobs right now. Check back soon.</p>
+            )}
           </div>
         ) : (
           <div className="market-service-grid">

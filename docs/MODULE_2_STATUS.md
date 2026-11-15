@@ -1,6 +1,6 @@
 # Module 2 status — Job Marketplace
 
-Last updated: 2026-11-14 (Asia/Dhaka). Implemented locally; **not committed** (user asked for no commits or branches).
+Last updated: 2026-11-15 (Asia/Dhaka). Implemented on `shibashis-module-2`; the final browse/application UI integration and regression tests are included on this branch.
 
 ## Scope decision
 

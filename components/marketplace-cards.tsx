@@ -6,6 +6,7 @@ import {
   type DemoOpportunity,
   type DemoService,
 } from "@/lib/demo-marketplace";
+import { formatDate, formatTaka, locationLabel } from "@/lib/job-format";
 
 export function ServiceCard({ service }: { service: DemoService }) {
   return (
@@ -92,6 +93,67 @@ export function OpportunityCard({
         <strong>
           ৳{opportunity.budgetBdt.toLocaleString("en-BD")}{" "}
           <small>sample budget</small>
+        </strong>
+      </div>
+    </article>
+  );
+}
+
+/** Card for a real (database-backed) open job. */
+export function JobCard({
+  job,
+  employerName,
+  applications,
+}: {
+  job: {
+    id: string;
+    title: string;
+    description: string;
+    category: string;
+    skills: string[];
+    budgetPoisha: number;
+    deadline: string;
+    locationType: string;
+    location: string | null;
+  };
+  employerName: string;
+  applications: number;
+}) {
+  return (
+    <article className="market-job-card">
+      <div className="market-job-top">
+        <span className="market-job-category">
+          {categoryLabel(job.category as never)}
+        </span>
+        <span className="small muted">
+          {applications} {applications === 1 ? "proposal" : "proposals"}
+        </span>
+      </div>
+      <Link href={`/opportunities/${job.id}`} className="market-job-title">
+        {job.title}
+        <ArrowUpRight size={18} aria-hidden="true" />
+      </Link>
+      <p className="market-job-org">{employerName}</p>
+      <p className="market-job-summary">
+        {job.description.length > 180
+          ? `${job.description.slice(0, 180)}…`
+          : job.description}
+      </p>
+      <div className="market-job-skills">
+        {job.skills.map((skill) => (
+          <span key={skill}>{skill}</span>
+        ))}
+      </div>
+      <div className="market-job-bottom">
+        <span>
+          <Clock3 size={15} aria-hidden="true" /> Due {formatDate(job.deadline)}
+        </span>
+        <span>
+          <MapPin size={15} aria-hidden="true" />{" "}
+          {locationLabel(job.locationType, job.location)}
+        </span>
+        <strong>
+          {formatTaka(job.budgetPoisha)} <small>budget</small>
         </strong>
       </div>
     </article>

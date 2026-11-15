@@ -1,15 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import {
   categories,
-  demoOpportunities,
   demoServices,
   type MarketplaceCategory,
 } from "@/lib/demo-marketplace";
-import { OpportunityCard, ServiceCard } from "./marketplace-cards";
+import { ServiceCard } from "./marketplace-cards";
 
 type Category = MarketplaceCategory | "all";
 
@@ -119,110 +117,6 @@ export function ServiceExplorer({
           <Search size={33} aria-hidden="true" />
           <h2>No sample services match</h2>
           <p>Try a different skill or category.</p>
-          <button
-            type="button"
-            onClick={() => {
-              setQuery("");
-              setCategory("all");
-            }}
-          >
-            Clear filters
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function OpportunityExplorer({
-  initialCategory,
-}: {
-  initialCategory: Category;
-}) {
-  const [category, setCategory] = useState<Category>(initialCategory);
-  const [query, setQuery] = useState("");
-  const results = useMemo(
-    () =>
-      demoOpportunities.filter(
-        (job) =>
-          (category === "all" || job.category === category) &&
-          (!query.trim() ||
-            [job.title, job.summary, job.organization, ...job.skills]
-              .join(" ")
-              .toLowerCase()
-              .includes(query.trim().toLowerCase())),
-      ),
-    [category, query],
-  );
-  return (
-    <div className="market-explorer">
-      <div className="market-explorer-toolbar">
-        <label className="market-explorer-search">
-          <Search size={19} aria-hidden="true" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search opportunities"
-            aria-label="Search opportunities"
-          />
-          {query && (
-            <button
-              type="button"
-              aria-label="Clear search"
-              onClick={() => setQuery("")}
-            >
-              <X size={17} />
-            </button>
-          )}
-        </label>
-        <Link href="/portfolio" className="market-text-link">
-          Prepare your portfolio →
-        </Link>
-      </div>
-      <div
-        className="market-filter-chips"
-        role="group"
-        aria-label="Filter opportunities by category"
-      >
-        <button
-          type="button"
-          className={category === "all" ? "active" : ""}
-          aria-pressed={category === "all"}
-          onClick={() => setCategory("all")}
-        >
-          All opportunities
-        </button>
-        {categories.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={category === item.id ? "active" : ""}
-            aria-pressed={category === item.id}
-            onClick={() => setCategory(item.id)}
-          >
-            {item.short}
-          </button>
-        ))}
-      </div>
-      <div className="market-result-meta">
-        <strong>
-          {results.length}{" "}
-          {results.length === 1 ? "sample opportunity" : "sample opportunities"}
-        </strong>
-        <span>Preview data · applications are not open</span>
-      </div>
-      {results.length ? (
-        <div className="market-opportunity-grid">
-          {results.map((job) => (
-            <OpportunityCard key={job.id} opportunity={job} />
-          ))}
-        </div>
-      ) : (
-        <div className="market-explorer-empty">
-          <Search size={33} aria-hidden="true" />
-          <h2>No sample opportunities match</h2>
-          <p>Try another search or category.</p>
           <button
             type="button"
             onClick={() => {
